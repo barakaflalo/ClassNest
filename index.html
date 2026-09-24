@@ -85,6 +85,13 @@ p{margin:6px 0}
 .tag.ok{border-color:var(--ok);color:var(--ok)}
 .tag.info{border-color:var(--info);color:var(--info)}
 .chip-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.daynav{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.daynav-t{flex:1;text-align:center;display:flex;flex-direction:column;line-height:1.3}
+.daynav-t b{font-family:var(--serif);font-size:20px}
+.subrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.subrow .nm{flex:1;font-weight:700}
+.subrow .seg{margin:0;flex-wrap:nowrap}
+.subrow .seg button{min-width:44px;padding:0 10px}
 .noschool{border:1px dashed var(--line-strong);border-radius:var(--r);padding:18px;margin:16px 0;text-align:center}
 .noschool b{font-family:var(--serif);font-size:22px;color:var(--gold);display:block}
 
@@ -218,6 +225,7 @@ pre.diag{white-space:pre-wrap;font-size:12.5px;background:var(--surface2);paddin
     <section class="screen" id="scr-tasks" aria-label="משימות ושיעורי בית"></section>
     <section class="screen" id="scr-events" aria-label="לוח אירועים"></section>
     <section class="screen" id="scr-journal" aria-label="יומן שיעורים"></section>
+    <section class="screen" id="scr-students" aria-label="תלמידים"></section>
     <section class="screen" id="scr-settings" aria-label="הגדרות"></section>
     <section class="screen" id="scr-setup" aria-label="הגדרת בית הספר"></section>
     <section class="screen" id="scr-about" aria-label="אודות"></section>
@@ -236,7 +244,7 @@ pre.diag{white-space:pre-wrap;font-size:12.5px;background:var(--surface2);paddin
    - SW: network-first shell, never-cache AI calls, cross-origin pass-through
    ===================================================================== */
 'use strict';
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 const APP_NAME = 'ClassNest';
 
 /* ---------- error log (first thing) ---------- */
@@ -380,6 +388,7 @@ function freshState(){
       ai:{provider:'gemini', model:'', connected:false}, hideBuiltin:false, calendarVersion:0
     },
     classes: [], subjects: [], slots: [], lessons: {}, tasks: [], events: [], trash: [],
+    overrides: [], students: [], preps: [], recurring: [],
     seen: {} // notification bookkeeping: id -> ISO
   };
 }
@@ -408,7 +417,7 @@ async function loadState(){
 /* ---------- lookups ---------- */
 const cls = id => S.classes.find(c => c.id === id);
 const sub = id => S.subjects.find(s => s.id === id);
-const slot = id => S.slots.find(s => s.id === id);
+const slot = id => S.slots.find(s => s.id === id) || extraSlot(id);
 const bell = n => S.settings.bells.find(b => b.n === n);
 function slotLabel(sl){
   if(!sl) return '';
@@ -514,9 +523,51 @@ function isNoSchool(date){
 function slotsForWeekday(wd){
   return S.slots.filter(s => s.day === wd && s.classId).sort((a,b) => a.period - b.period);
 }
-function lessonsOn(date){
+/* one-time changes: cancel / change (substitution, swap) / extra lesson; "move" = cancel + extra.
+   class-specific events (trip of one grade) cancel only that class's lessons. */
+function extraSlot(id){
+  const o = (S.overrides || []).find(x => x.id === id && x.type === 'extra');
+  return o ? {id:o.id, day:pd(o.date).getDay(), period:o.period, classId:o.classId, subjectId:o.subjectId || '', room:o.room || '', extra:true} : undefined;
+}
+function dayPlan(date){
   if(isNoSchool(date)) return [];
-  return slotsForWeekday(pd(date).getDay()).map(sl => ({date, slot:sl, bell:bell(sl.period)})).filter(x => x.bell);
+  const wd = pd(date).getDay();
+  const classOff = eventsOn(date).filter(e => e.noSchool && e.classIds && e.classIds.length);
+  const out = [];
+  for(const sl of slotsForWeekday(wd)){
+    const b = bell(sl.period); if(!b) continue;
+    const ov = S.overrides.find(o => o.date === date && o.slotId === sl.id && (o.type === 'cancel' || o.type === 'change'));
+    let eff = sl, status = 'normal', reason = '';
+    if(ov && ov.type === 'cancel'){ status = 'cancelled'; reason = ov.note || 'בוטל'; }
+    else if(ov && ov.type === 'change'){ eff = {...sl, classId: ov.classId || sl.classId, subjectId: ov.subjectId != null ? ov.subjectId : sl.subjectId}; status = 'changed'; reason = ov.note || ''; }
+    const off = status !== 'cancelled' && classOff.find(e => e.classIds.includes(eff.classId));
+    if(off){ status = 'cancelled'; reason = off.title; }
+    out.push({date, slot:eff, bell:b, status, reason, ov});
+  }
+  for(const o of S.overrides.filter(o => o.type === 'extra' && o.date === date)){
+    const b = bell(o.period); if(!b) continue;
+    const vs = extraSlot(o.id), off = classOff.find(e => e.classIds.includes(vs.classId));
+    out.push({date, slot:vs, bell:b, status: off ? 'cancelled' : 'extra', reason: off ? off.title : (o.note || ''), ov:o});
+  }
+  return out.sort((x, y) => x.bell.n - y.bell.n);
+}
+function lessonsOn(date){ return dayPlan(date).filter(x => x.status !== 'cancelled'); }
+/* when a lesson a "next lesson" reminder was pinned to stops existing, move the reminder to the real next one */
+function reflowTasks(){
+  const today = todayStr(); let moved = 0;
+  for(const t of openTasks()){
+    if(t.dueMode !== 'next' || !t.dueSlotId || !t.dueDate || t.dueDate < today || !t.classId) continue;
+    if(lessonsOn(t.dueDate).some(x => x.slot.id === t.dueSlotId && x.slot.classId === t.classId)) continue;
+    const sl = slot(t.dueSlotId), b = sl && bell(sl.period);
+    const nx = nextLesson(t.classId, t.subjectId, t.dueDate, b ? toMin(b.start) : -1);
+    if(nx){ t.dueDate = nx.date; t.dueTime = nx.time; t.dueSlotId = nx.slotId; t.notifiedAt = null; moved++; }
+  }
+  if(moved) save();
+  return moved;
+}
+function afterScheduleChange(){
+  const n = reflowTasks();
+  if(n) toast(n === 1 ? 'תזכורת אחת הועברה לשיעור הבא' : `${n} תזכורות הועברו לשיעור הבא`);
 }
 const lessonKey = (date, slotId) => `${date}|${slotId}`;
 function nextLesson(classId, subjectId, fromDate, fromMinute){
@@ -744,15 +795,17 @@ function taskRow(t, opts={}){
   return `<div class="item" data-task="${t.id}">
     <button class="check ${t.done?'on':''}" data-toggle="${t.id}" aria-label="${t.done?'סמן כלא בוצע':'סמן כבוצע'}: ${esc(t.title)}">${t.done?'✓':''}</button>
     <div class="item-main" data-open-task="${t.id}">
-      <div class="item-title">${t.kind==='hw'?'📚 ':''}${esc(t.title)}</div>
+      <div class="item-title">${t.kind==='hw'?'📚 ':''}${t.recurId?'🔁 ':''}${esc(t.title)}</div>
       <div class="item-meta">${c?classDot(c.id)+esc(c.name):''}${s?`<span>${esc(s.name)}</span>`:''}
-        <span class="tag ${overdue?'warn':''}">${overdue?'באיחור · ':''}${esc(describeDue(t))}</span></div>
+        <span class="tag ${overdue?'warn':''}">${overdue?'באיחור · ':''}${esc(describeDue(t))}</span>${subsSummary(t)}</div>
     </div>
+    ${t.kind==='hw' && classStudents(t.classId).length ? `<button class="edit-btn" data-subs="${t.id}" aria-label="סימון הגשות: ${esc(t.title)}" title="מי הגיש">👥</button>` : ''}
     ${opts.noEdit?'':`<button class="edit-btn" data-open-task="${t.id}" aria-label="עריכה">✏️</button>`}
   </div>`;
 }
 function bindTaskRows(root){
   $$('[data-toggle]', root).forEach(b => b.onclick = e => { e.stopPropagation(); toggleTask(b.dataset.toggle); });
+  $$('[data-subs]', root).forEach(b => b.onclick = e => { e.stopPropagation(); markSubs(S.tasks.find(t => t.id === b.dataset.subs)); });
   $$('[data-open-task]', root).forEach(b => b.onclick = () => editTask(S.tasks.find(t => t.id === b.dataset.openTask)));
   $$('.item[data-task]', root).forEach(el => longPress(el, () => editTask(S.tasks.find(t => t.id === el.dataset.task))));
 }
@@ -769,7 +822,8 @@ function eventRow(e){
     <div style="font-size:22px" aria-hidden="true">${ty.ic}</div>
     <div class="item-main"><div class="item-title">${esc(e.title)}</div>
       <div class="item-meta"><span>${esc(range)}${e.time?' · '+esc(e.time):''}</span>
-      ${e.noSchool?'<span class="tag info">אין לימודים</span>':''}${e.builtin?'<span class="tag">משרד החינוך</span>':''}
+      ${e.classIds && e.classIds.length ? `<span>${e.classIds.map(id => cls(id) ? classDot(id) + esc(cls(id).name) : '').join(' ')}</span>` : ''}
+      ${e.noSchool?`<span class="tag info">${e.classIds && e.classIds.length ? 'אין לימודים לכיתות אלה' : 'אין לימודים'}</span>`:''}${e.builtin?'<span class="tag">משרד החינוך</span>':''}
       ${dayDiff(todayStr(), e.date) >= 0 && dayDiff(todayStr(), e.date) <= 7 ? `<span class="tag ok">${esc(relDay(e.date))}</span>`:''}</div>
       ${e.note?`<div class="hint">${esc(e.note)}</div>`:''}</div>
     <button class="edit-btn" data-open-ev="${e.id}" aria-label="עריכה">✏️</button></div>`;
@@ -782,53 +836,81 @@ function nextSchoolDay(from){
   for(let i = 1; i < 120; i++){ const d = addDays(from, i); if(lessonsOn(d).length) return d; }
   return null;
 }
+function prepMapFor(date){
+  const m = {};
+  for(const p of S.preps || []){
+    if(!p.text || !p.text.trim()) continue;
+    const tg = prepTarget(p);
+    if(tg && tg.date === date) (m[lessonKey(tg.date, tg.slotId)] = m[lessonKey(tg.date, tg.slotId)] || []).push(p);
+  }
+  return m;
+}
 function renderBells(date){
-  const lessons = lessonsOn(date);
-  if(!lessons.length) return '';
-  const isToday = date === todayStr(), nm = nowMin();
-  const first = lessons[0].bell.n, last = lessons[lessons.length-1].bell.n;
+  const plan = dayPlan(date);
+  if(!plan.length) return '';
+  const isToday = date === todayStr(), nm = nowMin(), preps = prepMapFor(date);
+  const first = plan[0].bell.n, last = plan[plan.length-1].bell.n;
   const rows = S.settings.bells.filter(b => b.n >= first && b.n <= last).map(b => {
-    const L = lessons.find(x => x.bell.n === b.n);
+    const here = plan.filter(x => x.bell.n === b.n);
     const now = isToday && nm >= toMin(b.start) && nm < toMin(b.end);
     const past = isToday && nm >= toMin(b.end);
-    if(!L) return `<div class="bell free ${past?'past':''}" aria-label="שיעור ${b.n} חלון"><div class="bell-n">${b.n}</div><div><div class="bell-title">חלון</div><div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi></div></div><span></span></div>`;
-    const key = lessonKey(date, L.slot.id), rec = S.lessons[key];
-    const checks = openTasks().filter(t => t.dueSlotId === L.slot.id && t.dueDate === date);
-    const c = cls(L.slot.classId);
-    return `<button class="bell ${now?'now':''} ${past?'past':''}" data-lesson="${esc(key)}" aria-label="שיעור ${b.n}: ${esc(slotLabel(L.slot))}${now?' — עכשיו':''}">
+    if(!here.length) return `<div class="bell free ${past?'past':''}" aria-label="שיעור ${b.n} חלון"><div class="bell-n">${b.n}</div><div><div class="bell-title">חלון</div><div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi></div></div><span></span></div>`;
+    return here.map(L => {
+      const key = lessonKey(date, L.slot.id), rec = S.lessons[key];
+      const checks = L.status === 'cancelled' ? [] : openTasks().filter(t => t.dueSlotId === L.slot.id && t.dueDate === date);
+      const cx = L.status === 'cancelled';
+      const stTag = cx ? `<span class="tag warn">בוטל${L.reason && L.reason !== 'בוטל' ? ' · ' + esc(L.reason) : ''}</span>`
+        : L.status === 'changed' ? `<span class="tag info">שינוי${L.reason ? ' · ' + esc(L.reason) : ''}</span>`
+        : L.status === 'extra' ? `<span class="tag info">נוסף${L.reason ? ' · ' + esc(L.reason) : ''}</span>` : '';
+      return `<button class="bell ${now&&!cx?'now':''} ${past||cx?'past':''}" data-lesson="${esc(key)}" aria-label="שיעור ${b.n}: ${esc(slotLabel(L.slot))}${cx?' — בוטל':''}${now&&!cx?' — עכשיו':''}">
       <div class="bell-n">${b.n}</div>
-      <div><div class="bell-title">${classDot(L.slot.classId)} ${esc(slotLabel(L.slot))}</div>
-        <div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi>${L.slot.room?' · '+esc(L.slot.room):''}${now?' · <b style="color:var(--gold)">עכשיו</b>':''}</div></div>
+      <div><div class="bell-title" ${cx?'style="text-decoration:line-through"':''}>${classDot(L.slot.classId)} ${esc(slotLabel(L.slot))}</div>
+        <div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi>${L.slot.room?' · '+esc(L.slot.room):''}${now&&!cx?' · <b style="color:var(--gold)">עכשיו</b>':''}</div></div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        ${stTag}
         ${checks.length?`<span class="tag warn">לבדוק ${checks.length}</span>`:''}
+        ${preps[key] && !cx ? '<span class="tag">📋 הכנה</span>' : ''}
         ${rec && (rec.summary || (rec.audio||[]).length)?'<span class="tag ok">סוכם ✓</span>':''}
       </div></button>`;
+    }).join('');
   }).join('');
   return `<div class="bells">${rows}</div>`;
 }
-RENDER.home = () => {
+RENDER.home = (p = {}) => {
   const el = $('#scr-home'), today = todayStr(), d = new Date();
   const greet = d.getHours() < 12 ? 'בוקר טוב' : d.getHours() < 17 ? 'צהריים טובים' : 'ערב טוב';
+  const hasTT = S.slots.some(s => s.classId);
+  let view = p.date || today;
+  let autoNext = false;
+  if(!p.date && hasTT && !lessonsOn(today).length && !dayPlan(today).length){ const nx = nextSchoolDay(today); if(nx){ view = nx; autoNext = true; } }
   let html = `<div class="hero"><p class="hero-date">${esc(fmtDate(today))}</p>
     <div class="hero-sub">${greet}${S.settings.userName ? ', ' + esc(S.settings.userName) : ''}${S.settings.school ? ' · ' + esc(S.settings.school) : ''}</div></div>`;
-  if(!S.slots.some(s => s.classId)){
+  if(!hasTT){
     html += `<div class="card empty"><p style="font-family:var(--serif);font-size:22px;color:var(--ink);font-weight:700;margin:0">בוא נבנה את מערכת השעות שלך</p>
       <p>מגדירים פעם אחת את הצלצולים, הכיתות והמקצועות, ואז ממלאים את הטבלה השבועית. מכאן האפליקציה יודעת לבד מתי השיעור הבא של כל כיתה.</p>
       <button class="btn primary" data-go="setup">להגדרת בית הספר</button></div>`;
   }else{
     const ns = isNoSchool(today);
-    if(ns){
-      const nx = nextSchoolDay(today);
-      html += `<div class="noschool"><b>${esc(ns.reason)}</b>${nx ? `<span class="muted">יום הלימודים הבא: ${esc(fmtDate(nx))}</span>` : ''}</div>`;
-      if(nx){ html += `<h2>${esc(fmtDate(nx))}</h2>` + renderBells(nx); }
-    }else{
-      html += renderBells(today);
-      const nm = nowMin(), lessons = lessonsOn(today);
+    if(autoNext && ns) html += `<div class="noschool"><b>${esc(ns.reason)}</b><span class="muted">יום הלימודים הבא: ${esc(fmtDate(view))}</span></div>`;
+    html += `<div class="daynav" role="group" aria-label="מעבר בין ימים">
+      <button class="icon-btn" id="dPrev" aria-label="יום קודם">→</button>
+      <div class="daynav-t"><b>${esc(view === today ? 'היום' : relDay(view) === fmtDate(view) ? fmtDate(view) : relDay(view))}</b><span class="muted small">${esc(fmtDate(view))}</span></div>
+      <button class="icon-btn" id="dNext" aria-label="יום הבא">←</button></div>`;
+    const vns = isNoSchool(view);
+    const dayEvents = eventsOn(view).filter(e => !e.noSchool || (e.classIds && e.classIds.length));
+    if(vns && !autoNext) html += `<div class="noschool"><b>${esc(vns.reason)}</b><span class="muted">אין שיעורים ביום הזה</span></div>`;
+    if(dayEvents.length) html += `<div class="card">${dayEvents.map(eventRow).join('')}</div>`;
+    html += renderBells(view);
+    if(!vns && !dayPlan(view).length) html += `<p class="muted">אין שיעורים במערכת ביום הזה.</p>`;
+    if(view === today){
+      const lessons = lessonsOn(today), nm = nowMin();
       if(lessons.length && nm >= toMin(lessons[lessons.length-1].bell.end)){
         const nx = nextSchoolDay(today);
         if(nx) html += `<p class="muted small">היום נגמר. ${esc(relDay(nx))} מתחילים ב-${esc(lessonsOn(nx)[0].bell.start)} עם ${esc(slotLabel(lessonsOn(nx)[0].slot))}.</p>`;
       }
     }
+    if(!vns) html += `<div class="btn-row"><button class="btn sm" id="dExtra">＋ שיעור נוסף / מילוי מקום</button>${view !== today ? '<button class="btn sm" id="dToday">חזרה להיום</button>' : ''}</div>`;
+    else if(view !== today) html += `<div class="btn-row"><button class="btn sm" id="dToday">חזרה להיום</button></div>`;
   }
   const due = dueTasks();
   html += `<div class="section-row"><h2>לטיפול עכשיו</h2>${due.length?`<span class="tag warn">${due.length}</span>`:''}</div>`;
@@ -842,6 +924,7 @@ RENDER.home = () => {
     <button class="tile" data-go="tasks"><span class="ic">📚</span><b>משימות ושיעורי בית</b><span>${openTasks().length} פתוחות</span></button>
     <button class="tile" data-go="events"><span class="ic">📅</span><b>לוח אירועים</b><span>טקסים, חופשות, ימי הורים</span></button>
     <button class="tile" data-go="journal"><span class="ic">📝</span><b>יומן שיעורים</b><span>כל הסיכומים לפי כיתה</span></button>
+    <button class="tile" data-go="students"><span class="ic">👧</span><b>תלמידים</b><span>מי הגיש, מי לא</span></button>
     <button class="tile" data-go="settings"><span class="ic">⚙️</span><b>הגדרות</b><span>גיבוי, בינה, נעילה</span></button>
     <button class="tile" data-go="setup"><span class="ic">🏫</span><b>בית הספר</b><span>צלצולים, כיתות, מקצועות</span></button>
   </nav>
@@ -851,6 +934,11 @@ RENDER.home = () => {
   $$('[data-lesson]', el).forEach(b => b.onclick = () => go('lesson', {key: b.dataset.lesson}));
   bindTaskRows(el); bindEventRows(el);
   $('#fabAdd').onclick = () => editTask(null, {});
+  const shift = n => { const nd = addDays(view, n); params = {date: nd}; RENDER.home(params); };
+  if($('#dPrev')) $('#dPrev').onclick = () => shift(-1);
+  if($('#dNext')) $('#dNext').onclick = () => shift(1);
+  if($('#dToday')) $('#dToday').onclick = () => { params = {}; RENDER.home({}); };
+  if($('#dExtra')) $('#dExtra').onclick = () => addExtraLesson(view);
   refreshAlertDot();
 };
 
@@ -929,12 +1017,12 @@ function editSlot(day, n){
         const rec = ex || {id: uid(), day, period: n};
         rec.classId = classId; rec.subjectId = subjectId && subjectId !== '__new' ? subjectId : ''; rec.room = $('#sRoom', m).value.trim();
         if(!ex) S.slots.push(rec);
-        save(); closeModal(); rerender(); toast('נשמר');
+        save(); closeModal(); afterScheduleChange(); rerender(); toast('נשמר');
       };
       const clr = $('#sClear', m);
       if(clr) clr.onclick = async () => {
         if(!(await confirmBox('לרוקן את המשבצת? סיכומי שיעורים קודמים נשמרים ביומן.', 'רוקן', true))) return;
-        ex.classId = ''; ex.subjectId = ''; ex.room = ''; save(); rerender();
+        ex.classId = ''; ex.subjectId = ''; ex.room = ''; save(); afterScheduleChange(); rerender();
       };
     });
 }
@@ -978,7 +1066,7 @@ RENDER.setup = () => {
   $('#uSchool').oninput = e => { st.school = e.target.value.trim(); save(); };
   $$('#daysSeg button').forEach(b => b.onclick = () => {
     const d = +b.dataset.d; st.days = st.days.includes(d) ? st.days.filter(x => x !== d) : [...st.days, d].sort();
-    save(); RENDER.setup();
+    save(); afterScheduleChange(); RENDER.setup();
   });
   $('#addClass').onclick = () => editNamed('class');
   $('#addSub').onclick = () => editNamed('subject');
@@ -1014,8 +1102,10 @@ function editNamed(kind, item){
   openModal(`<h2>${item ? 'עריכת' : 'הוספת'} ${isC ? 'כיתה' : 'מקצוע'}</h2>
     <label class="f"><span>שם</span><input type="text" id="nName" value="${esc(item&&item.name||'')}" placeholder="${isC?'למשל ד׳2':'למשל מתמטיקה'}"></label>
     ${isC ? `<span class="small" style="font-weight:700">צבע</span><div class="seg" id="nCol">${CLASS_COLORS.map(c => `<button data-c="${c}" class="${c===color?'on':''}" aria-label="צבע ${c}" style="width:40px;padding:0"><span class="chip-dot" style="background:${c};width:18px;height:18px"></span></button>`).join('')}</div>` : ''}
+    ${isC && item ? `<div class="btn-row"><button class="btn sm" id="nStu">👧 תלמידי הכיתה (${classStudents(item.id).length})</button></div>` : ''}
     <div class="modal-actions"><button class="btn primary" id="nSave">שמור</button>${item?'<button class="btn danger" id="nDel">מחק</button>':''}<button class="btn" id="nNo">ביטול</button></div>`, m => {
     let col = color;
+    if($('#nStu', m)) $('#nStu', m).onclick = () => manageStudents(item.id);
     $$('#nCol button', m).forEach(b => b.onclick = () => { col = b.dataset.c; $$('#nCol button', m).forEach(x => x.classList.toggle('on', x === b)); });
     $('#nNo', m).onclick = () => closeModal();
     $('#nSave', m).onclick = () => {
@@ -1119,12 +1209,13 @@ RENDER.tasks = () => {
     <div class="seg" id="tfState"><button data-s="open">פתוחות</button><button data-s="done">בוצעו</button><button data-s="all">הכול</button></div>
     <label class="f"><span>כיתה</span><select id="tfClass">${optionList(S.classes, taskFilter.classId, 'כל הכיתות')}</select></label>
     ${list.length ? `<div class="card">${list.map(t => taskRow(t)).join('')}</div>` : `<div class="empty">${taskFilter.state==='done'?'עוד לא סימנת משימות כבוצעו.':'אין משימות פתוחות. אפשר להוסיף מכאן או מתוך כרטיס שיעור.'}</div>`}
-    <div class="btn-row"><button class="btn" id="tfCsv">⬇️ ייצוא CSV</button></div>
+    <div class="btn-row"><button class="btn" id="tfRec">🔁 תזכורות חוזרות (${(S.recurring||[]).length})</button><button class="btn" id="tfCsv">⬇️ ייצוא CSV</button></div>
     <button class="fab" id="tfAdd">＋ תזכורת</button>`;
   $$('#tfState button').forEach(b => { b.classList.toggle('on', b.dataset.s === taskFilter.state); b.onclick = () => { taskFilter.state = b.dataset.s; RENDER.tasks(); }; });
   $('#tfClass').onchange = e => { taskFilter.classId = e.target.value; RENDER.tasks(); };
   $('#tfAdd').onclick = () => editTask(null, {classId: taskFilter.classId});
   $('#tfCsv').onclick = exportTasksCsv;
+  $('#tfRec').onclick = manageRecurring;
   bindTaskRows(el);
 };
 
@@ -1175,32 +1266,43 @@ function editEvent(e){
     <div class="row2"><label class="f"><span>תאריך</span><input type="date" id="eDate" value="${esc(d.date)}"></label><label class="f"><span>עד תאריך (לא חובה)</span><input type="date" id="eEnd" value="${esc(d.end||'')}"></label></div>
     <div class="row2"><label class="f"><span>שעה (לא חובה)</span><input type="time" id="eTime" value="${esc(d.time||'')}"></label>
       <label class="f"><span>להזכיר</span><select id="eLead">${[['','לפי ההגדרה ('+S.settings.eventLeadDays+' ימים לפני)'],['0','ביום עצמו'],['1','יום לפני'],['2','יומיים לפני'],['3','3 ימים לפני'],['7','שבוע לפני']].map(([v,l]) => `<option value="${v}" ${String(d.lead??'')===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
-    <label class="switch"><span>אין לימודים ביום הזה (התזכורות ידלגו עליו)</span><input type="checkbox" id="eNo" ${d.noSchool?'checked':''}></label>
+    <span class="small" style="font-weight:700">למי זה רלוונטי?</span>
+    <div class="seg" id="eWho"><button data-w="all">כל בית הספר</button><button data-w="some">כיתות מסוימות</button></div>
+    <div class="seg" id="eCls" hidden>${S.classes.map(c => `<button data-c="${c.id}" class="${(d.classIds||[]).includes(c.id)?'on':''}">${classDot(c.id)} ${esc(c.name)}</button>`).join('') || '<span class="muted small">אין כיתות מוגדרות</span>'}</div>
+    <label class="switch"><span id="eNoLbl">אין לימודים ביום הזה (התזכורות ידלגו לשיעור הבא)</span><input type="checkbox" id="eNo" ${d.noSchool?'checked':''}></label>
     <label class="f"><span>הערה</span><input type="text" id="eNote" value="${esc(d.note||'')}"></label>
     <div class="modal-actions"><button class="btn primary" id="eSave">שמור</button><button class="btn" id="eIcs">📲 ליומן הטלפון</button>
       ${!isNew ? `<button class="btn danger" id="eDel">${d.builtin ? (d.hidden ? 'הצג שוב' : 'הסתר') : 'מחק'}</button>` : ''}<button class="btn" id="eNo2">ביטול</button></div>`,
   m => {
     $$('#eType button', m).forEach(b => b.onclick = () => { d.type = b.dataset.t; $$('#eType button', m).forEach(x => x.classList.toggle('on', x === b)); });
+    let who = d.classIds && d.classIds.length ? 'some' : 'all';
+    const updWho = () => { $$('#eWho button', m).forEach(b => b.classList.toggle('on', b.dataset.w === who)); $('#eCls', m).hidden = who !== 'some';
+      $('#eNoLbl', m).textContent = who === 'some' ? 'אין לימודים לכיתות שנבחרו (התזכורות שלהן ידלגו לשיעור הבא)' : 'אין לימודים ביום הזה (התזכורות ידלגו לשיעור הבא)'; };
+    updWho();
+    $$('#eWho button', m).forEach(b => b.onclick = () => { who = b.dataset.w; updWho(); });
+    $$('#eCls button', m).forEach(b => b.onclick = () => b.classList.toggle('on'));
     const collect = () => {
       d.title = $('#eTitle', m).value.trim(); d.date = $('#eDate', m).value; d.end = $('#eEnd', m).value;
       if(d.end && d.end < d.date) d.end = '';
       d.time = $('#eTime', m).value; d.lead = $('#eLead', m).value === '' ? null : +$('#eLead', m).value;
       d.noSchool = $('#eNo', m).checked; d.note = $('#eNote', m).value.trim();
+      d.classIds = who === 'some' ? $$('#eCls button.on', m).map(b => b.dataset.c) : [];
     };
     $('#eNo2', m).onclick = () => closeModal();
     $('#eIcs', m).onclick = () => { collect(); if(!d.title || !d.date){ toast('צריך שם ותאריך', true); return; } shareOrDownload('classnest-event.ics', buildICS([eventToIcs(d)]), 'text/calendar'); };
     $('#eSave', m).onclick = () => {
       collect();
       if(!d.title || !d.date){ toast('צריך שם ותאריך', true); return; }
+      if(who === 'some' && !d.classIds.length){ toast('בחר לפחות כיתה אחת', true); return; }
       if(d.builtin) d.userEdited = true;
       if(e) Object.assign(e, d); else S.events.push(d);
-      save(); closeModal(); rerender(); toast('נשמר');
+      save(); closeModal(); afterScheduleChange(); rerender(); toast('נשמר');
     };
     const del = $('#eDel', m);
     if(del) del.onclick = async () => {
-      if(d.builtin){ e.hidden = !e.hidden; save(); closeModal(); rerender(); toast(e.hidden ? 'הוסתר — אפשר להחזיר מ"מוסתרים"' : 'מוצג שוב'); return; }
+      if(d.builtin){ e.hidden = !e.hidden; save(); closeModal(); afterScheduleChange(); rerender(); toast(e.hidden ? 'הוסתר — אפשר להחזיר מ"מוסתרים"' : 'מוצג שוב'); return; }
       if(!(await confirmBox('למחוק את האירוע? אפשר לשחזר מסל המחזור בהגדרות.', 'מחק', true))) return;
-      e.deleted = true; S.trash.unshift({kind:'event', id:e.id, at:new Date().toISOString(), label:e.title}); save(); rerender();
+      e.deleted = true; S.trash.unshift({kind:'event', id:e.id, at:new Date().toISOString(), label:e.title}); save(); afterScheduleChange(); rerender();
     };
   });
 }
@@ -1220,9 +1322,15 @@ function pruneEmptyLesson(key){
 }
 RENDER.lesson = ({key}) => {
   const el = $('#scr-lesson');
-  const [date, slotId] = key.split('|'); const sl = slot(slotId);
+  const [date, slotId] = key.split('|');
+  const planItem = dayPlan(date).find(x => x.slot.id === slotId);
+  const sl = planItem ? planItem.slot : slot(slotId);
   const rec = getLesson(key, false);
   const classId = rec.classId || (sl && sl.classId), subjectId = rec.subjectId || (sl && sl.subjectId);
+  const status = planItem ? planItem.status : (isNoSchool(date) ? 'cancelled' : 'normal');
+  const myPrep = (S.preps || []).find(p => p.fromKey === key);
+  const prepsHere = (S.preps || []).filter(p => p.text && p.text.trim() && p.fromKey !== key && (() => { const tg = prepTarget(p); return tg && lessonKey(tg.date, tg.slotId) === key; })());
+  const nextOf = classId ? nextLesson(classId, subjectId, date, sl && bell(sl.period) ? toMin(bell(sl.period).end) : 1439) : null;
   const b = sl && bell(sl.period);
   const title = [sub(subjectId) && sub(subjectId).name, cls(classId) && cls(classId).name].filter(Boolean).join(' · ') || 'שיעור';
   const toCheck = openTasks().filter(t => (t.dueSlotId === slotId && t.dueDate === date) || (t.classId === classId && t.dueDate && t.dueDate < date && (!subjectId || !t.subjectId || t.subjectId === subjectId)));
@@ -1232,6 +1340,11 @@ RENDER.lesson = ({key}) => {
   const aiOn = aiReady();
   el.innerHTML = `<div class="screen-head"><button class="back" id="lBack" aria-label="חזרה">→ חזרה</button><h1>${esc(title)}</h1></div>
   <div class="lesson-head"><div class="lesson-kicker">${classDot(classId)}<span>${esc(fmtDate(date))}</span>${b ? `<span class="tag">שיעור ${b.n} · <bdi class="t">${b.start}–${b.end}</bdi></span>` : ''}${sl && sl.room ? `<span>${esc(sl.room)}</span>` : ''}</div></div>
+  ${status === 'cancelled' ? `<div class="banner">השיעור הזה בוטל${planItem && planItem.reason ? ': ' + esc(planItem.reason) : ''}. תזכורות שהיו מוצמדות אליו עברו לשיעור הבא של הכיתה.</div>` : ''}
+  ${status === 'changed' ? `<div class="banner info">שינוי חד-פעמי${planItem.reason ? ': ' + esc(planItem.reason) : ''}</div>` : ''}
+  ${status === 'extra' ? `<div class="banner info">שיעור נוסף${planItem.reason ? ': ' + esc(planItem.reason) : ''}</div>` : ''}
+  <div class="btn-row"><button class="btn sm" id="lOv">🔁 ${status === 'normal' ? 'שינוי בשיעור הזה (ביטול, החלפה, הזזה)' : 'עריכת השינוי'}</button></div>
+  ${prepsHere.length ? `<h2>📋 תכננת לשיעור הזה</h2>${prepsHere.map(p => `<div class="prev" style="color:var(--ink)">${esc(p.text)}<div class="hint">נכתב ב${esc(fmtDate(p.fromDate))}</div></div>`).join('')}` : ''}
   ${toCheck.length ? `<h2>לבדוק בשיעור הזה</h2><div class="card">${toCheck.map(t => taskRow(t)).join('')}</div>` : ''}
   ${prev ? `<h2>בשיעור הקודם</h2><div class="prev"><b>${esc(fmtDate(prev.date))}</b>\n${esc((prev.summary||'').slice(0,600)) || '<i>הוקלט בלי סיכום כתוב</i>'}${prevHw.length ? '\n\nשיעורי בית: ' + prevHw.map(t => esc(t.title)).join(' · ') : ''}</div>` : ''}
   <h2>סיכום השיעור</h2>
@@ -1253,7 +1366,10 @@ RENDER.lesson = ({key}) => {
   ${!aiOn ? '<p class="hint">תמלול של הקלטה שמורה דורש חיבור בינה (Gemini חינם) בהגדרות. ההכתבה החיה למעלה עובדת בלי חיבור.</p>' : ''}
   <div class="section-row"><h2>שיעורי בית ותזכורות מהשיעור</h2></div>
   ${given.length ? `<div class="card">${given.map(t => taskRow(t)).join('')}</div>` : '<p class="muted small">עוד לא נתת שיעורי בית בשיעור הזה.</p>'}
-  <div class="btn-row"><button class="btn primary" id="lHw">📚 נתתי שיעורי בית</button><button class="btn" id="lTask">📌 תזכורת לשיעור הבא</button></div>`;
+  <div class="btn-row"><button class="btn primary" id="lHw">📚 נתתי שיעורי בית</button><button class="btn" id="lTask">📌 תזכורת לשיעור הבא</button></div>
+  ${classId ? `<h2>📋 הכנה לשיעור הבא</h2>
+  <textarea id="lPrep" style="min-height:90px" placeholder="למשל: להתחיל עמ׳ 35, להביא סרגלים, לחזור על שברים" aria-label="הכנה לשיעור הבא">${esc(myPrep ? myPrep.text : '')}</textarea>
+  <p class="hint">${nextOf ? `יופיע בשיעור הבא: ${esc(fmtDate(nextOf.date))} · שיעור ${slot(nextOf.slotId) ? slot(nextOf.slotId).period : ''}. אם השיעור יבוטל, ההכנה עוברת איתו.` : 'לא נמצא שיעור הבא לכיתה הזו במערכת.'}</p>` : ''}`;
 
   $('#lBack').onclick = () => history.length > 1 ? history.back() : go('home');
   const ta = $('#lSum'); let tmr = null;
@@ -1288,6 +1404,15 @@ RENDER.lesson = ({key}) => {
     try{ await Store.del('media', bt.dataset.adel); }catch(e){}
     pruneEmptyLesson(key); save(); RENDER.lesson({key});
   });
+  $('#lOv').onclick = () => editOverride(date, slotId);
+  const pr = $('#lPrep');
+  if(pr){ let pt = null; pr.oninput = () => { clearTimeout(pt); pt = setTimeout(() => {
+    let p = (S.preps || []).find(x => x.fromKey === key);
+    const endMin = sl && bell(sl.period) ? toMin(bell(sl.period).end) : 1439;
+    if(!p){ if(!pr.value.trim()) return; p = {id:uid(), fromKey:key, fromDate:date, fromMin:endMin, classId, subjectId, createdAt:new Date().toISOString()}; S.preps.push(p); }
+    p.text = pr.value; if(!p.text.trim()) S.preps = S.preps.filter(x => x !== p);
+    save();
+  }, 700); }; }
   $('#lHw').onclick = () => editTask(null, {origin:{date, slotId}, kind:'hw'});
   $('#lTask').onclick = () => editTask(null, {origin:{date, slotId}, kind:'task'});
   bindTaskRows(el);
@@ -1766,7 +1891,7 @@ function showGuide(onDone){
     const n = $('#gN', m), s = $('#gS', m), d = $('#gD', m), b = $('#gB', m);
     if(n) n.onclick = () => { i++; draw(m); $('button', m).focus(); };
     if(b) b.onclick = () => { i--; draw(m); };
-    const finish = () => { S.settings.onboarded = true; save(); closeModal(true); if(onDone) onDone(); };
+    const finish = () => { S.settings.onboarded = true; S.settings.seenVersion = APP_VERSION; save(); closeModal(true); if(onDone) onDone(); };
     if(s) s.onclick = finish;
     if(d) d.onclick = finish;
   };
@@ -1778,11 +1903,11 @@ function showGuide(onDone){
    ===================================================================== */
 window.APPNEST_ASSISTANT_CONFIG = {
   appName: 'ClassNest',
-  appDescription: 'ClassNest הוא יומן תזכורות למורה בבית ספר יסודי שמלמד כמה כיתות ומקצועות: מערכת שעות שבועית, סיכום לכל שיעור (כתיבה/הכתבה/הקלטה+תמלול), שיעורי בית עם תזכורת בשיעור הבא של אותה כיתה, ולוח אירועים עם חופשות משרד החינוך תשפ"ז. עזור למורה לנסח סיכומים ותזכורות, להסביר איך לעשות דברים באפליקציה ולנווט. מידע על תלמידים רגיש — אל תבקש שמות מלאים או פרטים מזהים. מועדי משרד החינוך — לוודא מול בית הספר.',
+  appDescription: 'ClassNest הוא יומן תזכורות למורה בבית ספר יסודי שמלמד כמה כיתות ומקצועות: מערכת שעות שבועית, סיכום לכל שיעור (כתיבה/הכתבה/הקלטה+תמלול), שיעורי בית עם תזכורת בשיעור הבא של אותה כיתה, ולוח אירועים עם חופשות משרד החינוך תשפ"ז. יש גם שינויים חד-פעמיים בשיעור (ביטול/מילוי מקום/הזזה — מתוך כרטיס השיעור), אירועים לכיתות מסוימות, רשימות תלמידים עם סימון הגשות (✓/✗/⌀), הכנה לשיעור הבא, ותזכורות חוזרות במסך המשימות. עזור למורה לנסח סיכומים ותזכורות, להסביר איך לעשות דברים באפליקציה ולנווט. מידע על תלמידים רגיש — אל תבקש שמות מלאים או פרטים מזהים. מועדי משרד החינוך — לוודא מול בית הספר.',
   tabs: [
     {name:'היום שלי', screen:'home'}, {name:'מערכת שעות', screen:'timetable'}, {name:'משימות ושיעורי בית', screen:'tasks'},
     {name:'לוח אירועים', screen:'events'}, {name:'יומן שיעורים', screen:'journal'}, {name:'הגדרות', screen:'settings'},
-    {name:'בית הספר (צלצולים, כיתות, מקצועות)', screen:'setup'}, {name:'אודות', screen:'about'}
+    {name:'תלמידים ומעקב הגשות', screen:'students'}, {name:'בית הספר (צלצולים, כיתות, מקצועות)', screen:'setup'}, {name:'אודות', screen:'about'}
   ],
   fields: [{name:'summary', label:'סיכום השיעור (במסך שיעור פתוח)', placeholder:'מה עשינו היום?'}],
   navigate: name => go(name),
@@ -1799,10 +1924,328 @@ window.APPNEST_ASSISTANT_CONFIG = {
       if(L) go('lesson', {key: lessonKey(todayStr(), L.slot.id)}); else toast('אין שיעור כרגע');
     }},
     newReminder: {desc:'פתח חלון להוספת תזכורת חדשה', run: () => editTask(null, {})},
+    recurringReminders: {desc:'פתח את ניהול התזכורות החוזרות (כל שבוע / כל חודש)', run: () => manageRecurring()},
     weeklyReport: {desc:'הפק דוח שבועי להדפסה/PDF', run: printWeekly}
   },
   suggestions: ['מה יש לי היום?', 'איך מוסיפים אסיפת הורים?', 'עזור לי לנסח סיכום לשיעור', 'מתי חופשת חנוכה?']
 };
+/* =====================================================================
+   v1.1 — one-time changes · students & submissions · prep for next lesson · recurring reminders
+   ===================================================================== */
+
+/* ---------- prep: shown in the real next lesson of that class+subject (follows cancellations) ---------- */
+function prepTarget(p){
+  if(!p.classId) return null;
+  return nextLesson(p.classId, p.subjectId, p.fromDate, p.fromMin != null ? p.fromMin : 1439);
+}
+
+/* ---------- one-time changes ---------- */
+const CANCEL_REASONS = ['טיול','מבחן','אירוע בית ספר','היעדרות שלי','חופש לכיתה','אחר'];
+function periodOptions(sel){ return S.settings.bells.map(b => `<option value="${b.n}" ${b.n===sel?'selected':''}>שיעור ${b.n} (${b.start})</option>`).join(''); }
+function editOverride(date, slotId){
+  const plan = dayPlan(date).find(x => x.slot.id === slotId);
+  const base = S.slots.find(s => s.id === slotId);
+  const isExtra = !!(plan ? plan.slot.extra : extraSlot(slotId));
+  const ov = plan && plan.ov;
+  const cur = plan ? plan.slot : (base || extraSlot(slotId));
+  if(!cur){ toast('השיעור לא נמצא', true); return; }
+  let mode = ov && ov.type === 'change' ? 'change' : 'cancel';
+  let reason = ov && ov.type === 'cancel' && CANCEL_REASONS.includes(ov.note) ? ov.note : '';
+  openModal(`<h2>שינוי בשיעור</h2><p class="muted">${esc(fmtDate(date))} · שיעור ${cur.period} · ${esc(slotLabel(cur))}</p>
+    ${plan && plan.status === 'cancelled' && !ov ? `<div class="banner info">השיעור מבוטל בגלל אירוע: ${esc(plan.reason)}. אפשר לשנות את זה במסך האירועים.</div>` : ''}
+    <div class="seg" id="ovMode">${isExtra ? '' : '<button data-m="cancel">❌ מבוטל</button>'}<button data-m="change">🔄 מילוי מקום / החלפה</button><button data-m="move">📆 הזזה ליום אחר</button></div>
+    <div id="ovCancel">
+      <span class="small" style="font-weight:700">סיבה</span>
+      <div class="seg" id="ovReason">${CANCEL_REASONS.map(r => `<button data-r="${esc(r)}" class="${r===reason?'on':''}">${esc(r)}</button>`).join('')}</div>
+      <label class="f"><span>פירוט (לא חובה)</span><input type="text" id="ovNote" value="${esc(ov && ov.type==='cancel' && !CANCEL_REASONS.includes(ov.note) ? ov.note || '' : '')}" placeholder="למשל: טיול שכבתי לירושלים"></label>
+    </div>
+    <div id="ovChange" hidden>
+      <p class="hint">למשל: אתה ממלא מקום בכיתה אחרת, או שהמקצוע הוחלף בשיעור הזה בלבד.</p>
+      <div class="row2"><label class="f"><span>כיתה</span><select id="ovClass">${optionList(S.classes, (ov && ov.classId) || cur.classId)}</select></label>
+      <label class="f"><span>מקצוע</span><select id="ovSub">${optionList(S.subjects, ov && ov.type==='change' ? ov.subjectId : cur.subjectId, '—')}</select></label></div>
+      <label class="f"><span>הערה</span><input type="text" id="ovCNote" value="${esc(ov && ov.type==='change' ? ov.note || '' : '')}" placeholder="למשל: מילוי מקום"></label>
+    </div>
+    <div id="ovMove" hidden>
+      <div class="row2"><label class="f"><span>לתאריך</span><input type="date" id="ovDate" value="${esc(addDays(date, 1))}"></label>
+      <label class="f"><span>שיעור</span><select id="ovPeriod">${periodOptions(cur.period)}</select></label></div>
+    </div>
+    <div class="modal-actions"><button class="btn primary" id="ovSave">שמור שינוי</button>
+      ${ov ? `<button class="btn danger" id="ovUndo">${isExtra ? 'מחק את השיעור הנוסף' : 'בטל שינוי — מתקיים כרגיל'}</button>` : ''}<button class="btn" id="ovNo">ביטול</button></div>`,
+  m => {
+    const upd = () => {
+      $$('#ovMode button', m).forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+      $('#ovCancel', m).hidden = mode !== 'cancel'; $('#ovChange', m).hidden = mode !== 'change'; $('#ovMove', m).hidden = mode !== 'move';
+    };
+    if(isExtra && mode === 'cancel') mode = 'change';
+    upd();
+    $$('#ovMode button', m).forEach(b => b.onclick = () => { mode = b.dataset.m; upd(); });
+    $$('#ovReason button', m).forEach(b => b.onclick = () => { reason = b.dataset.r; $$('#ovReason button', m).forEach(x => x.classList.toggle('on', x === b)); });
+    $('#ovNo', m).onclick = () => closeModal();
+    const removeOv = () => { if(ov) S.overrides = S.overrides.filter(o => o !== ov && o.id !== ov.linkId && o.linkId !== ov.id); };
+    $('#ovSave', m).onclick = () => {
+      if(mode === 'cancel'){
+        removeOv();
+        const note = $('#ovNote', m).value.trim() || reason || 'בוטל';
+        S.overrides.push({id:uid(), type:'cancel', date, slotId, note});
+      }else if(mode === 'change'){
+        const classId = $('#ovClass', m).value, subjectId = $('#ovSub', m).value, note = $('#ovCNote', m).value.trim();
+        if(isExtra){ const o = S.overrides.find(x => x.id === slotId); Object.assign(o, {classId, subjectId, note: note || o.note}); }
+        else { removeOv(); S.overrides.push({id:uid(), type:'change', date, slotId, classId, subjectId, note}); }
+      }else{
+        const nd = $('#ovDate', m).value, np = +$('#ovPeriod', m).value;
+        if(!nd){ toast('בחר תאריך', true); return; }
+        if(isNoSchool(nd)){ toast('ביום הזה אין לימודים: ' + isNoSchool(nd).reason, true); return; }
+        const exId = uid();
+        if(isExtra){ const o = S.overrides.find(x => x.id === slotId); o.date = nd; o.period = np; }
+        else {
+          removeOv();
+          const cId = uid();
+          S.overrides.push({id:cId, type:'cancel', date, slotId, note:`הוזז ל${fmtDate(nd)}`, linkId:exId});
+          S.overrides.push({id:exId, type:'extra', date:nd, period:np, classId:cur.classId, subjectId:cur.subjectId, room:cur.room||'', note:`הוזז מ${fmtDate(date,false)}`, linkId:cId});
+        }
+      }
+      save(); closeModal(); afterScheduleChange(); rerender(); toast('השינוי נשמר');
+    };
+    const undo = $('#ovUndo', m);
+    if(undo) undo.onclick = async () => {
+      if(isExtra){
+        if(!(await confirmBox('למחוק את השיעור הנוסף? סיכום שנכתב בו נשאר ביומן.', 'מחק', true))) return;
+        const o = S.overrides.find(x => x.id === slotId);
+        S.overrides = S.overrides.filter(x => x.id !== slotId && x.id !== (o && o.linkId));
+      }else removeOv();
+      save(); closeModal(); afterScheduleChange();
+      if(isExtra && current === 'lesson') go('home'); else rerender();
+      toast('עודכן');
+    };
+  });
+}
+function addExtraLesson(date){
+  if(!S.classes.length){ toast('צריך קודם להוסיף כיתות', true); return; }
+  openModal(`<h2>שיעור נוסף / מילוי מקום</h2><p class="muted">${esc(fmtDate(date))}</p>
+    <label class="f"><span>שיעור</span><select id="xP">${periodOptions(1)}</select></label>
+    <div class="row2"><label class="f"><span>כיתה</span><select id="xC">${optionList(S.classes, '')}</select></label>
+    <label class="f"><span>מקצוע</span><select id="xS">${optionList(S.subjects, '', '—')}</select></label></div>
+    <label class="f"><span>הערה</span><input type="text" id="xN" placeholder="למשל: מילוי מקום, תגבור"></label>
+    <div class="modal-actions"><button class="btn primary" id="xOk">הוסף</button><button class="btn" id="xNo">ביטול</button></div>`, m => {
+    $('#xNo', m).onclick = () => closeModal();
+    $('#xOk', m).onclick = () => {
+      S.overrides.push({id:uid(), type:'extra', date, period:+$('#xP', m).value, classId:$('#xC', m).value, subjectId:$('#xS', m).value, note:$('#xN', m).value.trim()});
+      save(); closeModal(); rerender(); toast('השיעור נוסף ליום הזה');
+    };
+  });
+}
+function pruneOverrides(){
+  const lim = addDays(todayStr(), -120);
+  const before = S.overrides.length;
+  S.overrides = S.overrides.filter(o => o.date >= lim || Object.keys(S.lessons).some(k => k.endsWith('|' + o.id)));
+  if(S.overrides.length !== before) save();
+}
+
+/* ---------- students & homework submissions ---------- */
+const SUB_STATES = {done:{ic:'✓', label:'הגיש'}, missing:{ic:'✗', label:'לא הגיש'}, absent:{ic:'⌀', label:'חסר'}};
+function classStudents(classId){
+  return (S.students || []).filter(s => s.classId === classId && !s.archived).sort((a,b) => a.name.localeCompare(b.name, 'he'));
+}
+function subsSummary(t){
+  if(!t || t.kind !== 'hw' || !t.subs) return '';
+  const v = Object.values(t.subs), miss = v.filter(x => x === 'missing').length, done = v.filter(x => x === 'done').length;
+  if(!v.length) return '';
+  return miss ? `<span class="tag warn">${miss} לא הגישו</span>` : `<span class="tag ok">${done} הגישו</span>`;
+}
+function markSubs(t){
+  if(!t) return;
+  const list = classStudents(t.classId);
+  if(!list.length){ manageStudents(t.classId); return; }
+  const subs = {...(t.subs || {})};
+  const draw = m => {
+    const c = {done:0, missing:0, absent:0}; Object.values(subs).forEach(v => c[v] = (c[v]||0) + 1);
+    $('#sbCount', m).textContent = `✓ ${c.done} · ✗ ${c.missing} · ⌀ ${c.absent} · לא סומנו ${list.length - c.done - c.missing - c.absent}`;
+    list.forEach(s => $$(`[data-st="${s.id}"] button`, m).forEach(b => b.classList.toggle('on', subs[s.id] === b.dataset.v)));
+  };
+  openModal(`<h2>מי הגיש?</h2><p class="muted">${esc(t.title)} · ${esc(cls(t.classId) ? cls(t.classId).name : '')}</p>
+    <div class="btn-row"><button class="btn sm" id="sbAll">כולם הגישו</button><button class="btn sm" id="sbClr">נקה</button></div>
+    <p class="hint" id="sbCount" aria-live="polite"></p>
+    <div>${list.map(s => `<div class="subrow"><span class="nm">${esc(s.name)}</span><div class="seg" data-st="${s.id}" role="group" aria-label="${esc(s.name)}">
+      ${Object.entries(SUB_STATES).map(([k,v]) => `<button data-v="${k}" aria-label="${v.label}" title="${v.label}">${v.ic}</button>`).join('')}</div></div>`).join('')}</div>
+    <div class="modal-actions"><button class="btn primary" id="sbDone">שמור וסמן כנבדק ✓</button><button class="btn" id="sbSave">שמור</button><button class="btn" id="sbNo">ביטול</button></div>`, m => {
+    draw(m);
+    list.forEach(s => $$(`[data-st="${s.id}"] button`, m).forEach(b => b.onclick = () => { subs[s.id] = subs[s.id] === b.dataset.v ? undefined : b.dataset.v; if(!subs[s.id]) delete subs[s.id]; hapt(); draw(m); }));
+    $('#sbAll', m).onclick = () => { list.forEach(s => { if(subs[s.id] !== 'absent') subs[s.id] = 'done'; }); draw(m); };
+    $('#sbClr', m).onclick = () => { Object.keys(subs).forEach(k => delete subs[k]); draw(m); };
+    $('#sbNo', m).onclick = () => closeModal();
+    const commit = done => { t.subs = subs; if(done){ t.done = true; t.doneAt = new Date().toISOString(); } save(); closeModal(); rerender(); toast(done ? 'נבדק ✓' : 'נשמר'); };
+    $('#sbSave', m).onclick = () => commit(false);
+    $('#sbDone', m).onclick = () => commit(true);
+  });
+}
+function manageStudents(classId){
+  const c = cls(classId);
+  if(!c){ toast('בחר כיתה', true); return; }
+  const list = classStudents(classId);
+  openModal(`<h2>תלמידי ${esc(c.name)}</h2>
+    <p class="hint">מומלץ שם פרטי או כינוי בלבד. הרשימה נשמרת רק במכשיר.</p>
+    <label class="f"><span>הוספה — שם בכל שורה (אפשר להדביק רשימה)</span><textarea id="stAdd" style="min-height:90px" placeholder="נועה&#10;איתי&#10;מאיה ל."></textarea></label>
+    <button class="btn sm" id="stAddBtn">＋ הוסף</button>
+    <h3>${list.length} תלמידים</h3>
+    <div>${list.map(s => `<div class="subrow"><span class="nm">${esc(s.name)}</span><button class="edit-btn" data-ren="${s.id}" aria-label="שינוי שם ${esc(s.name)}">✏️</button><button class="edit-btn" data-rm="${s.id}" aria-label="הסרת ${esc(s.name)}">🗑️</button></div>`).join('') || '<p class="muted small">עוד אין תלמידים ברשימה.</p>'}</div>
+    <div class="modal-actions"><button class="btn primary" id="stClose">סיום</button></div>`, m => {
+    $('#stAddBtn', m).onclick = () => {
+      const names = $('#stAdd', m).value.split(/\n|,/).map(x => x.trim()).filter(Boolean);
+      const exist = new Set(list.map(s => s.name));
+      const add = names.filter(n => !exist.has(n));
+      add.forEach(name => S.students.push({id:uid(), classId, name, note:'', archived:false}));
+      save(); toast(add.length ? `נוספו ${add.length}` : 'לא נוספו שמות חדשים'); manageStudents(classId);
+    };
+    $$('[data-ren]', m).forEach(b => b.onclick = () => {
+      const s = S.students.find(x => x.id === b.dataset.ren), n = (prompt('שם חדש:', s.name) || '').trim();
+      if(n){ s.name = n; save(); manageStudents(classId); }
+    });
+    $$('[data-rm]', m).forEach(b => b.onclick = async () => {
+      const s = S.students.find(x => x.id === b.dataset.rm);
+      if(!(await confirmBox(`להסיר את ${s.name} מהרשימה? ההיסטוריה שלו נשמרת בגיבוי.`, 'הסר', true))) return;
+      s.archived = true; save(); manageStudents(classId);
+    });
+    $('#stClose', m).onclick = () => { closeModal(); rerender(); };
+  }, () => rerender());
+}
+let stClass = '';
+RENDER.students = () => {
+  const el = $('#scr-students');
+  if(!stClass || !cls(stClass)) stClass = S.classes[0] ? S.classes[0].id : '';
+  let html = head('תלמידים');
+  if(!S.classes.length){ el.innerHTML = html + `<div class="empty">צריך קודם להוסיף כיתות. <button class="btn" data-go="setup">לבית הספר</button></div>`; return; }
+  html += `<div class="seg" id="stSeg">${S.classes.map(c => `<button data-c="${c.id}" class="${c.id===stClass?'on':''}">${classDot(c.id)} ${esc(c.name)}</button>`).join('')}</div>`;
+  const list = classStudents(stClass);
+  const hws = S.tasks.filter(t => !t.deleted && t.kind === 'hw' && t.classId === stClass && t.subs && Object.keys(t.subs).length);
+  if(!list.length){
+    html += `<div class="empty">אין עדיין תלמידים ב${esc(cls(stClass).name)}.<br><button class="btn primary" id="stManage">＋ הוספת תלמידים</button></div>`;
+  }else{
+    const rows = list.map(s => {
+      const c = {done:0, missing:0, absent:0};
+      hws.forEach(t => { const v = t.subs[s.id]; if(v) c[v]++; });
+      return {s, c};
+    }).sort((a,b) => b.c.missing - a.c.missing || a.s.name.localeCompare(b.s.name, 'he'));
+    html += `<p class="hint">לפי ${hws.length} שיעורי בית שסימנת בהם הגשות. ממוין לפי "לא הגיש".</p><div class="card">${rows.map(({s,c}) => `<div class="item" data-stu="${s.id}">
+      <div class="item-main"><div class="item-title">${esc(s.name)}</div><div class="item-meta">${c.missing ? `<span class="tag warn">✗ ${c.missing} לא הגיש</span>` : ''}<span>✓ ${c.done}</span>${c.absent ? `<span>⌀ ${c.absent} חסר</span>` : ''}${s.note ? '<span>📝</span>' : ''}</div></div>
+      <button class="edit-btn" data-stu-open="${s.id}" aria-label="פרטים">›</button></div>`).join('')}</div>
+      <div class="btn-row"><button class="btn" id="stManage">✏️ ניהול הרשימה</button></div>`;
+  }
+  el.innerHTML = html;
+  $$('#stSeg button').forEach(b => b.onclick = () => { stClass = b.dataset.c; RENDER.students(); });
+  if($('#stManage')) $('#stManage').onclick = () => manageStudents(stClass);
+  $$('[data-stu]', el).forEach(i => i.onclick = () => studentDetail(S.students.find(s => s.id === i.dataset.stu)));
+};
+function studentDetail(s){
+  const hws = S.tasks.filter(t => !t.deleted && t.kind === 'hw' && t.classId === s.classId && t.subs && t.subs[s.id]).sort((a,b) => (b.dueDate||'').localeCompare(a.dueDate||''));
+  const miss = hws.filter(t => t.subs[s.id] === 'missing');
+  openModal(`<h2>${esc(s.name)}</h2><p class="muted">${esc(cls(s.classId) ? cls(s.classId).name : '')}</p>
+    <h3>לא הגיש (${miss.length})</h3>${miss.length ? `<div>${miss.map(t => `<div class="subrow"><span class="nm" style="font-weight:600">${esc(t.title)}</span><span class="muted small">${t.dueDate ? esc(fmtDate(t.dueDate,false)) : ''}</span></div>`).join('')}</div>` : '<p class="muted small">אין. 👏</p>'}
+    <label class="f"><span>הערה אישית (נשמרת רק במכשיר)</span><textarea id="sdNote" style="min-height:80px">${esc(s.note||'')}</textarea></label>
+    <div class="modal-actions"><button class="btn primary" id="sdSave">שמור</button><button class="btn" id="sdNo">סגור</button></div>`, m => {
+    $('#sdNo', m).onclick = () => closeModal();
+    $('#sdSave', m).onclick = () => { s.note = $('#sdNote', m).value.trim(); save(); closeModal(); rerender(); toast('נשמר'); };
+  });
+}
+
+/* ---------- recurring reminders ---------- */
+function lastDayOfMonth(y, m){ return new Date(y, m + 1, 0).getDate(); }
+function recurOccurrences(r, from, to){
+  const out = [];
+  if(r.freq === 'weekly'){
+    for(let d = from; d <= to; d = addDays(d, 1)){
+      if(!(r.days || []).includes(pd(d).getDay())) continue;
+      if(r.skipHolidays && isNoSchool(d)) continue;
+      out.push(d);
+    }
+  }else{
+    const s = pd(from), e = pd(to);
+    for(let y = s.getFullYear(), mo = s.getMonth(); y < e.getFullYear() || (y === e.getFullYear() && mo <= e.getMonth()); mo === 11 ? (y++, mo = 0) : mo++){
+      const last = lastDayOfMonth(y, mo);
+      let day = r.monthDay === 'last' ? last : Math.min(+r.monthDay || 1, last);
+      let d = `${y}-${pad(mo+1)}-${pad(day)}`;
+      if(r.skipHolidays){ let guard = 0; while(isNoSchool(d) && guard++ < 20) d = addDays(d, -1); }
+      if(d >= from && d <= to) out.push(d);
+    }
+  }
+  return out;
+}
+function ensureRecurring(){
+  const today = todayStr(); let made = 0;
+  for(const r of S.recurring || []){
+    if(r.paused) continue;
+    r.gen = r.gen || {};
+    const start = [r.createdAt ? r.createdAt.slice(0,10) : today, addDays(today, -7)].sort().pop();
+    for(const occ of recurOccurrences(r, start, addDays(today, 14))){
+      if(r.gen[occ]) continue;
+      r.gen[occ] = 1; made++;
+      S.tasks.push({id:uid(), kind:'task', title:r.title, notes:r.notes || '', classId:r.classId || '', subjectId:'', dueMode:'date', dueDate:occ, dueTime:r.time || '07:30', dueSlotId:'', done:false, createdAt:new Date().toISOString(), recurId:r.id});
+    }
+    const lim = addDays(today, -60);
+    Object.keys(r.gen).forEach(k => { if(k < lim) delete r.gen[k]; });
+  }
+  if(made) save();
+}
+function recurLabel(r){
+  const when = r.freq === 'weekly' ? 'כל ' + (r.days || []).slice().sort().map(d => DAYS[d]).join(', ') : r.monthDay === 'last' ? 'סוף כל חודש' : `כל ${r.monthDay} בחודש`;
+  return `${when} · ${r.time || '07:30'}${r.skipHolidays ? ' · מדלג על חופשות' : ''}`;
+}
+function manageRecurring(){
+  openModal(`<h2>🔁 תזכורות חוזרות</h2><p class="hint">למשל: כל חמישי לשלוח עדכון להורים, כל סוף חודש להזין ציונים. כל מופע מופיע ברשימת המשימות ואפשר לסמן אותו כבוצע.</p>
+    ${(S.recurring||[]).length ? `<div>${S.recurring.map(r => `<div class="item" data-rec="${r.id}"><div class="item-main"><div class="item-title">${r.paused?'⏸️ ':''}${esc(r.title)}</div><div class="item-meta">${esc(recurLabel(r))}${r.classId && cls(r.classId) ? ' · ' + esc(cls(r.classId).name) : ''}</div></div><button class="edit-btn" aria-label="עריכה">✏️</button></div>`).join('')}</div>` : '<p class="muted">עוד אין תזכורות חוזרות.</p>'}
+    <div class="modal-actions"><button class="btn primary" id="rcNew">＋ תזכורת חוזרת</button><button class="btn" id="rcClose">סגור</button></div>`, m => {
+    $('#rcClose', m).onclick = () => closeModal();
+    $('#rcNew', m).onclick = () => editRecurring(null);
+    $$('[data-rec]', m).forEach(i => i.onclick = () => editRecurring(S.recurring.find(r => r.id === i.dataset.rec)));
+  }, () => rerender());
+}
+function editRecurring(r){
+  const d = r ? {...r, days:[...(r.days||[])]} : {id:uid(), title:'', freq:'weekly', days:[4], monthDay:'last', time:'07:30', classId:'', notes:'', skipHolidays:true, createdAt:new Date().toISOString()};
+  openModal(`<h2>${r ? 'עריכת' : 'הוספת'} תזכורת חוזרת</h2>
+    <label class="f"><span>מה להזכיר?</span><input type="text" id="rT" value="${esc(d.title)}" placeholder="למשל: לשלוח עדכון שבועי להורים"></label>
+    <div class="seg" id="rF"><button data-f="weekly">כל שבוע</button><button data-f="monthly">כל חודש</button></div>
+    <div id="rW"><span class="small" style="font-weight:700">באילו ימים</span><div class="seg" id="rD">${[0,1,2,3,4,5,6].map(x => `<button data-d="${x}" class="${d.days.includes(x)?'on':''}">${DAYS[x]}</button>`).join('')}</div></div>
+    <label class="f" id="rM"><span>באיזה יום בחודש</span><select id="rMD"><option value="last" ${d.monthDay==='last'?'selected':''}>סוף החודש</option>${Array.from({length:28}, (_,i) => `<option value="${i+1}" ${String(d.monthDay)===String(i+1)?'selected':''}>${i+1}</option>`).join('')}</select></label>
+    <div class="row2"><label class="f"><span>שעה</span><input type="time" id="rTime" value="${esc(d.time)}"></label>
+    <label class="f"><span>כיתה (לא חובה)</span><select id="rC">${optionList(S.classes, d.classId, 'כללי')}</select></label></div>
+    <label class="switch"><span>לדלג על חופשות<br><span class="hint">בחודשי: מקדים ליום הלימודים הקודם</span></span><input type="checkbox" id="rSk" ${d.skipHolidays?'checked':''}></label>
+    ${r ? `<label class="switch"><span>מושהית</span><input type="checkbox" id="rP" ${d.paused?'checked':''}></label>` : ''}
+    <label class="f"><span>הערות</span><input type="text" id="rN" value="${esc(d.notes||'')}"></label>
+    <div class="modal-actions"><button class="btn primary" id="rOk">שמור</button>${r ? '<button class="btn danger" id="rDel">מחק</button>' : ''}<button class="btn" id="rNo">ביטול</button></div>`, m => {
+    const upd = () => { $$('#rF button', m).forEach(b => b.classList.toggle('on', b.dataset.f === d.freq)); $('#rW', m).hidden = d.freq !== 'weekly'; $('#rM', m).hidden = d.freq !== 'monthly'; };
+    upd();
+    $$('#rF button', m).forEach(b => b.onclick = () => { d.freq = b.dataset.f; upd(); });
+    $$('#rD button', m).forEach(b => b.onclick = () => { const x = +b.dataset.d; d.days = d.days.includes(x) ? d.days.filter(y => y !== x) : [...d.days, x]; b.classList.toggle('on'); });
+    const clearFuture = id => { const t0 = todayStr(); S.tasks = S.tasks.filter(t => !(t.recurId === id && !t.done && t.dueDate >= t0)); const rr = S.recurring.find(x => x.id === id); if(rr && rr.gen) Object.keys(rr.gen).forEach(k => { if(k >= t0) delete rr.gen[k]; }); };
+    $('#rNo', m).onclick = () => manageRecurring();
+    $('#rOk', m).onclick = () => {
+      d.title = $('#rT', m).value.trim(); d.time = $('#rTime', m).value || '07:30'; d.classId = $('#rC', m).value; d.notes = $('#rN', m).value.trim();
+      d.monthDay = $('#rMD', m).value === 'last' ? 'last' : +$('#rMD', m).value; d.skipHolidays = $('#rSk', m).checked; if($('#rP', m)) d.paused = $('#rP', m).checked;
+      if(!d.title){ toast('כתוב מה להזכיר', true); return; }
+      if(d.freq === 'weekly' && !d.days.length){ toast('בחר לפחות יום אחד', true); return; }
+      if(r){ clearFuture(r.id); Object.assign(r, d, {gen: r.gen}); } else S.recurring.push(d);
+      ensureRecurring(); save(); toast('נשמר'); manageRecurring();
+    };
+    const del = $('#rDel', m);
+    if(del) del.onclick = async () => {
+      if(!(await confirmBox('למחוק את התזכורת החוזרת? מופעים שכבר בוצעו נשארים.', 'מחק', true))) return;
+      clearFuture(r.id); S.recurring = S.recurring.filter(x => x.id !== r.id); save(); manageRecurring();
+    };
+  }, () => rerender());
+}
+
+/* ---------- what's new (once per version for existing users) ---------- */
+function whatsNew(){
+  if(!S.settings.onboarded || S.settings.seenVersion === APP_VERSION) return false;
+  S.settings.seenVersion = APP_VERSION; save();
+  openModal(`<h2>מה חדש ב-ClassNest ${APP_VERSION}</h2>
+    <div class="item"><div style="font-size:22px">🔁</div><div class="item-main"><div class="item-title">שינויים חד-פעמיים</div><div class="hint">ביטול, מילוי מקום או הזזה של שיעור בודד (בכרטיס השיעור), ושיעור נוסף מדף הבית. תזכורות עוברות לבד לשיעור הבא.</div></div></div>
+    <div class="item"><div style="font-size:22px">🚌</div><div class="item-main"><div class="item-title">אירוע לכיתות מסוימות</div><div class="hint">טיול של שכבה? אירוע עם "אין לימודים" רק לכיתות שבחרת.</div></div></div>
+    <div class="item"><div style="font-size:22px">👧</div><div class="item-main"><div class="item-title">תלמידים ומעקב הגשות</div><div class="hint">כפתור 👥 ליד שיעורי בית: ✓ הגיש, ✗ לא הגיש, ⌀ חסר. במסך התלמידים רואים מי חוזר על עצמו.</div></div></div>
+    <div class="item"><div style="font-size:22px">📋</div><div class="item-main"><div class="item-title">הכנה לשיעור הבא</div><div class="hint">כותבים בסוף כרטיס השיעור, ורואים את זה כשהשיעור הבא מגיע.</div></div></div>
+    <div class="item"><div style="font-size:22px">🗓️</div><div class="item-main"><div class="item-title">תזכורות חוזרות</div><div class="hint">במסך המשימות: כל שבוע או כל חודש.</div></div></div>
+    <div class="modal-actions"><button class="btn primary" id="wnOk">מעולה</button></div>`, m => { $('#wnOk', m).onclick = () => closeModal(); });
+  return true;
+}
 /* =====================================================================
    INIT
    ===================================================================== */
@@ -1817,15 +2260,18 @@ async function init(){
   await loadState();
   await Vault.load();
   mergeBuiltinCalendar();
+  ['overrides','students','preps','recurring'].forEach(k => { if(!Array.isArray(S[k])) S[k] = []; });
+  pruneOverrides(); ensureRecurring(); reflowTasks();
   applyTheme(); updateAiLed();
   if(Store.mode === 'memory') toast('הדפדפן חוסם שמירה — הנתונים לא יישמרו אחרי סגירה', true);
   await showLock();
   try{ history.replaceState({name:'home', p:{}}, ''); }catch(e){}
   go('home', {}, false);
   if(!S.settings.onboarded) showGuide(() => { if(!S.slots.some(s => s.classId)) go('setup'); });
-  else showReminderSheet(false);
+  else if(!whatsNew()) showReminderSheet(false);
   reminderTick();
-  setInterval(() => { reminderTick(); if(current === 'home' && !$('.modal-bg')) RENDER.home(); }, 60000);
+  let lastDay = todayStr();
+  setInterval(() => { if(todayStr() !== lastDay){ lastDay = todayStr(); ensureRecurring(); reflowTasks(); } reminderTick(); if(current === 'home' && !$('.modal-bg')) RENDER.home(params); }, 60000);
   if(S.slots.some(s => s.classId)) requestPersist();
 }
 document.addEventListener('visibilitychange', async () => {
