@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.anthropic.com https://api.openai.com; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>ClassNest · היומן של המורה</title>
+<meta name="description" content="יומן תזכורות למורה: מערכת שעות, סיכומי שיעור, שיעורי בית ואירועי בית הספר">
+<meta name="theme-color" content="#060606">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta property="og:title" content="ClassNest · היומן של המורה">
+<meta property="og:description" content="מערכת שעות, סיכומי שיעור, שיעורי בית ותזכורות — הכול על המכשיר">
+<meta property="og:image" content="icon-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== ClassNest · tokens ===== */
+:root{
+  --bg:#060606; --surface:#111009; --surface2:#1a1810; --line:rgba(212,175,55,.22); --line-strong:rgba(212,175,55,.55);
+  --gold:#d4af37; --gold-soft:#e9cf7a; --ink:#f3ecd8; --muted:#a79f8a; --danger:#e0685a; --ok:#6fbf8a; --info:#7fb0d8;
+  --on-gold:#0b0a06; --shadow:0 1px 0 rgba(212,175,55,.08);
+  --serif:"Frank Ruhl Libre","David Libre","Times New Roman",serif;
+  --sans:"Assistant","Segoe UI",Arial,sans-serif;
+  --r-sm:8px; --r:14px; --r-lg:22px;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f7f3e8; --surface:#fffdf6; --surface2:#f1ead6; --line:rgba(140,108,20,.25); --line-strong:rgba(140,108,20,.6);
+  --gold:#9a7412; --gold-soft:#7a5b0c; --ink:#1d1a12; --muted:#6c6452; --danger:#b23b2e; --ok:#2f7d4f; --info:#2f6690;
+  --on-gold:#fffdf6; color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.skip{position:absolute;inset-inline-start:-999px;top:0;background:var(--gold);color:var(--on-gold);padding:8px 12px;z-index:99}
+.skip:focus{inset-inline-start:8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== layout ===== */
+.app{max-width:760px;margin:0 auto;padding:0 16px 120px}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);display:flex;align-items:center;gap:8px;padding:12px 0 10px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-weight:900;font-size:22px;letter-spacing:.2px;flex:1;display:flex;align-items:center;gap:10px}
+.brand small{font-family:var(--sans);font-weight:600;font-size:13px;color:var(--muted)}
+.brand-mark{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--gold);color:var(--on-gold);font-size:16px}
+.icon-btn{min-width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:transparent;display:inline-grid;place-items:center;cursor:pointer;font-size:19px;position:relative}
+.icon-btn .dot[hidden]{display:none}
+.icon-btn .dot{position:absolute;top:6px;inset-inline-end:6px;min-width:18px;height:18px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.ai-led{width:10px;height:10px;border-radius:50%;background:var(--danger);display:inline-block}
+.ai-led.on{background:var(--ok)}
+.screen{display:none;animation:in .18s ease-out}
+.screen.active{display:block}
+@keyframes in{from{opacity:.4;transform:translateY(6px)}to{opacity:1;transform:none}}
+.screen-head{display:flex;align-items:center;gap:10px;margin:18px 0 14px}
+.screen-head h1{font-family:var(--serif);font-size:28px;font-weight:900;margin:0;flex:1;line-height:1.2}
+.back{height:48px;padding:0 18px;border-radius:14px;border:1.5px solid var(--gold);background:transparent;color:var(--gold);font-weight:700;cursor:pointer;font-size:16px}
+h2{font-family:var(--serif);font-weight:700;font-size:21px;margin:26px 0 10px}
+h3{font-size:16px;margin:16px 0 6px}
+p{margin:6px 0}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+
+/* ===== today hero ===== */
+.hero{margin:18px 0 6px}
+.hero-date{font-family:var(--serif);font-size:34px;font-weight:900;line-height:1.1;margin:0}
+.hero-sub{color:var(--muted);margin-top:4px}
+.bells{margin:18px 0 8px;border-inline-start:2px solid var(--line-strong);padding-inline-start:0}
+.bell{display:grid;grid-template-columns:54px 1fr auto;gap:12px;align-items:center;padding:12px 14px 12px 12px;border-bottom:1px solid var(--line);cursor:pointer;position:relative;background:transparent;border-inline:none;border-top:none;width:100%;text-align:start}
+.bell:hover{background:var(--surface)}
+.bell-n{font-family:var(--serif);font-weight:900;font-size:30px;color:var(--gold);text-align:center;line-height:1}
+.bell-t{font-size:13px;color:var(--muted)}
+.bell-title{font-weight:700;font-size:18px}
+.bell.now{background:var(--surface2)}
+.bell.now::before{content:"";position:absolute;inset-inline-start:-2px;top:0;bottom:0;width:4px;background:var(--gold)}
+.bell.past .bell-n,.bell.past .bell-title{opacity:.55}
+.bell.free .bell-title{color:var(--muted);font-weight:600}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:700;border:1px solid var(--line-strong);color:var(--gold);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.tag.warn{border-color:var(--danger);color:var(--danger)}
+.tag.ok{border-color:var(--ok);color:var(--ok)}
+.tag.info{border-color:var(--info);color:var(--info)}
+.chip-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.noschool{border:1px dashed var(--line-strong);border-radius:var(--r);padding:18px;margin:16px 0;text-align:center}
+.noschool b{font-family:var(--serif);font-size:22px;color:var(--gold);display:block}
+
+/* ===== nav tiles ===== */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:22px 0}
+.tile{min-height:92px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:14px;text-align:start;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
+.tile:hover{border-color:var(--line-strong)}
+.tile .ic{font-size:24px}
+.tile b{font-size:17px}
+.tile span{font-size:13px;color:var(--muted)}
+
+/* ===== lists / cards ===== */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+.item{display:flex;gap:12px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none}
+.item:last-child{border-bottom:none}
+.item-main{flex:1;min-width:0}
+.item-title{font-weight:700}
+.item-meta{font-size:13.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:3px;align-items:center}
+.check{width:30px;height:30px;border-radius:9px;border:2px solid var(--gold);background:transparent;cursor:pointer;flex:none;display:grid;place-items:center;color:var(--on-gold);font-weight:900}
+.check.on{background:var(--gold)}
+.edit-btn{border:1px solid var(--line);background:transparent;border-radius:10px;min-width:40px;height:40px;cursor:pointer;flex:none}
+.empty{padding:28px 10px;text-align:center;color:var(--muted)}
+.empty .btn{margin-top:12px}
+.section-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.section-row h2{margin-bottom:6px}
+
+/* ===== buttons / forms ===== */
+.btn{min-height:48px;padding:0 18px;border-radius:14px;border:1.5px solid var(--gold);background:transparent;color:var(--gold);font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--gold);color:var(--on-gold)}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btn.block{width:100%}
+.btn.sm{min-height:38px;padding:0 12px;font-size:14.5px;border-radius:11px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.fab{position:fixed;inset-inline-start:max(16px,calc(50% - 364px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:30;height:58px;padding:0 22px;border-radius:29px;background:var(--gold);color:var(--on-gold);border:none;font-weight:800;font-size:17px;box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer}
+label.f{display:block;margin:12px 0}
+label.f>span{display:block;font-size:14px;font-weight:700;margin-bottom:5px}
+input[type=text],input[type=time],input[type=date],input[type=number],input[type=password],input[type=search],select,textarea{width:100%;min-height:48px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface2);padding:10px 12px;outline:none}
+textarea{min-height:140px;resize:vertical;line-height:1.6}
+input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.seg button{min-height:40px;padding:0 13px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;cursor:pointer;font-weight:600}
+.seg button.on{background:var(--gold);color:var(--on-gold);border-color:var(--gold)}
+.seg button.on .tag{color:var(--on-gold);border-color:var(--on-gold)}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.switch input{width:22px;height:22px;accent-color:var(--gold)}
+.hint{font-size:13.5px;color:var(--muted);margin-top:4px}
+
+/* ===== timetable grid ===== */
+.tt-wrap{overflow-x:auto;margin:0 -16px;padding:0 16px}
+.tt{border-collapse:separate;border-spacing:3px;min-width:340px;width:100%;table-layout:fixed}
+.tt th{font-size:13px;color:var(--muted);font-weight:700;padding:4px}
+.tt th.pn{font-family:var(--serif);color:var(--gold);font-size:22px;width:34px}
+.tt td{padding:0}
+.cell{width:100%;min-height:62px;border-radius:9px;border:1px solid var(--line);background:var(--surface);cursor:pointer;padding:5px 2px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;font-size:12px;line-height:1.2;overflow:hidden}
+.cell b,.cell span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px}
+.cell.empty-c{color:var(--muted);border-style:dashed;background:transparent}
+.cell b{font-size:13.5px!important}
+bdi.t{unicode-bidi:isolate;direction:ltr}
+.cell.today{border-color:var(--gold)}
+
+/* ===== modal ===== */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg) var(--r-lg) 0 0;width:100%;max-width:640px;max-height:92vh;overflow:auto;padding:18px 18px calc(22px + env(safe-area-inset-bottom,0px));animation:up .2s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.modal h2{margin-top:0}
+.modal-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.modal-actions .btn{flex:1}
+@media(min-width:700px){.modal-bg{align-items:center}.modal{border-radius:var(--r-lg)}}
+
+.toast{position:fixed;bottom:calc(90px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:700;z-index:90;max-width:90vw;text-align:center}
+.toast.err{background:var(--danger);color:#fff}
+
+/* ===== lesson ===== */
+.lesson-head{border-bottom:1px solid var(--line);padding-bottom:12px}
+.lesson-kicker{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted)}
+.rec{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rec-live{color:var(--danger);font-weight:800;display:flex;align-items:center;gap:6px}
+.rec-live::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--danger);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.audio-item{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.audio-item audio{width:100%}
+.prev{border-inline-start:3px solid var(--line-strong);padding:6px 12px;margin:10px 0;color:var(--muted);white-space:pre-wrap}
+.prev b{color:var(--ink)}
+
+/* ===== lock ===== */
+.lock{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px}
+.lock h1{font-family:var(--serif);margin:0}
+.pin-in{font-size:28px;letter-spacing:10px;text-align:center;max-width:220px}
+
+/* ===== guide ===== */
+.guide-step{text-align:center;padding:10px 4px}
+.guide-step .big{font-size:52px}
+.guide-dots{display:flex;gap:6px;justify-content:center;margin:12px 0}
+.guide-dots i{width:8px;height:8px;border-radius:4px;background:var(--line-strong)}
+.guide-dots i.on{background:var(--gold);width:22px}
+
+.badge-foot{text-align:center;color:var(--muted);font-size:13px;margin:34px 0 0}
+.badge-foot b{color:var(--gold);font-family:var(--serif)}
+.banner{border:1px solid var(--danger);color:var(--danger);border-radius:12px;padding:10px 12px;margin:12px 0;font-size:14.5px}
+.banner.info{border-color:var(--line-strong);color:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:15px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+pre.diag{white-space:pre-wrap;font-size:12.5px;background:var(--surface2);padding:10px;border-radius:10px;max-height:260px;overflow:auto;direction:ltr;text-align:left}
+
+@media print{
+  body{background:#fff;color:#000}
+  .topbar,.fab,.back,.no-print,.tiles{display:none!important}
+  .screen{display:none!important}
+  #printArea{display:block!important}
+}
+#printArea{display:none}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">דלג לתוכן</a>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">📘</span><span>ClassNest<br><small>היומן של המורה <span class="ai-led" id="aiLed" title="בינה לא מחוברת" style="margin-inline-start:4px"></span></small></span></div>
+    <button class="icon-btn" id="btnAlerts" aria-label="תזכורות פתוחות" title="תזכורות">🔔<span class="dot" id="alertDot" hidden>0</span></button>
+    <button class="icon-btn" id="btnTheme" aria-label="החלף מצב יום/לילה" title="יום/לילה">🌙</button>
+    <button class="icon-btn" id="btnAbout" aria-label="אודות" title="אודות">ℹ️</button>
+  </header>
+  <main id="main" tabindex="-1">
+    <section class="screen active" id="scr-home" aria-label="היום שלי"></section>
+    <section class="screen" id="scr-timetable" aria-label="מערכת שעות"></section>
+    <section class="screen" id="scr-lesson" aria-label="שיעור"></section>
+    <section class="screen" id="scr-tasks" aria-label="משימות ושיעורי בית"></section>
+    <section class="screen" id="scr-events" aria-label="לוח אירועים"></section>
+    <section class="screen" id="scr-journal" aria-label="יומן שיעורים"></section>
+    <section class="screen" id="scr-settings" aria-label="הגדרות"></section>
+    <section class="screen" id="scr-setup" aria-label="הגדרת בית הספר"></section>
+    <section class="screen" id="scr-about" aria-label="אודות"></section>
+  </main>
+</div>
+<div id="modalRoot"></div>
+<div id="printArea"></div>
+<script>
+/* =====================================================================
+   ClassNest — היומן של המורה · AppNest 2026 · Barak Aflalo
+   Single-file PWA. Data stays on the device (IndexedDB → localStorage → memory).
+   Critical fixes carried from the AppNest base spec (v11) — do not remove:
+   - Storage shim with fallback chain + persist() request
+   - API key encrypted with AES-GCM (non-extractable CryptoKey), never in backups
+   - Model "golden rule": latest alias first + fallback chain + live model list
+   - SW: network-first shell, never-cache AI calls, cross-origin pass-through
+   ===================================================================== */
+'use strict';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'ClassNest';
+
+/* ---------- error log (first thing) ---------- */
+const ERRLOG_KEY = 'cn_errlog';
+function logErr(msg, src, line){
+  try{
+    const a = JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');
+    a.unshift({t:new Date().toISOString(), m:String(msg).slice(0,300), s:src||'', l:line||''});
+    localStorage.setItem(ERRLOG_KEY, JSON.stringify(a.slice(0,10)));
+  }catch(e){}
+}
+window.addEventListener('error', e => logErr(e.message, (e.filename||'').split('/').pop(), e.lineno));
+window.addEventListener('unhandledrejection', e => logErr('Promise: ' + (e.reason && (e.reason.message||e.reason)), '', ''));
+
+/* ---------- helpers ---------- */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const DAYS_SHORT = ["א'","ב'","ג'","ד'","ה'","ו'","ש'"];
+const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const pad = n => String(n).padStart(2,'0');
+const ds = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const pd = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const todayStr = () => ds(new Date());
+const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate()+n); return ds(d); };
+const dayDiff = (a, b) => Math.round((pd(b) - pd(a)) / 86400000);
+const toMin = t => { if(!t) return 0; const [h,m] = t.split(':').map(Number); return h*60+m; };
+const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinutes(); };
+function fmtDate(s, withDay=true){
+  const d = pd(s);
+  return (withDay ? `יום ${DAYS[d.getDay()]}, ` : '') + `${d.getDate()} ב${MONTHS[d.getMonth()]}`;
+}
+function relDay(s){
+  const n = dayDiff(todayStr(), s);
+  if(n === 0) return 'היום';
+  if(n === 1) return 'מחר';
+  if(n === -1) return 'אתמול';
+  if(n > 1 && n < 7) return `בעוד ${n} ימים`;
+  if(n < -1) return `לפני ${-n} ימים`;
+  return fmtDate(s, true);
+}
+function toast(msg, err=false){
+  const t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : '');
+  t.setAttribute('role', err ? 'alert' : 'status');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), err ? 4200 : 2400);
+}
+function hapt(ms=15){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+/* ---------- Storage shim: IndexedDB → localStorage → memory ---------- */
+const Store = (() => {
+  const DB = 'classnest', VER = 1;
+  let db = null, mode = 'memory';
+  const mem = {kv:{}, media:{}, secrets:{}};
+  function open(){
+    return new Promise(res => {
+      if(!('indexedDB' in window)) return res(null);
+      let req;
+      try{ req = indexedDB.open(DB, VER); }catch(e){ return res(null); }
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        ['kv','media','secrets'].forEach(s => { if(!d.objectStoreNames.contains(s)) d.createObjectStore(s); });
+      };
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => res(null);
+      req.onblocked = () => res(null);
+    });
+  }
+  async function init(){
+    db = await open();
+    if(db){ mode = 'idb'; return mode; }
+    try{ localStorage.setItem('cn_probe','1'); localStorage.removeItem('cn_probe'); mode = 'local'; }catch(e){ mode = 'memory'; }
+    return mode;
+  }
+  function tx(store, rw, fn){
+    return new Promise((res, rej) => {
+      const t = db.transaction(store, rw ? 'readwrite' : 'readonly');
+      const r = fn(t.objectStore(store));
+      t.oncomplete = () => res(r && r.result);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error || new Error('abort'));
+    });
+  }
+  async function get(store, key){
+    if(mode === 'idb') return tx(store, false, s => s.get(key));
+    if(mode === 'local' && store !== 'media'){ const v = localStorage.getItem(`cn_${store}_${key}`); return v == null ? undefined : JSON.parse(v); }
+    return mem[store][key];
+  }
+  async function set(store, key, val){
+    if(mode === 'idb') return tx(store, true, s => s.put(val, key));
+    if(mode === 'local' && store !== 'media' && store !== 'secrets'){ localStorage.setItem(`cn_${store}_${key}`, JSON.stringify(val)); return; }
+    mem[store][key] = val;
+  }
+  async function del(store, key){
+    if(mode === 'idb') return tx(store, true, s => s.delete(key));
+    if(mode === 'local') localStorage.removeItem(`cn_${store}_${key}`);
+    delete mem[store][key];
+  }
+  async function keys(store){
+    if(mode === 'idb') return tx(store, false, s => s.getAllKeys());
+    return Object.keys(mem[store]);
+  }
+  async function clearAll(){
+    if(mode === 'idb'){ for(const s of ['kv','media','secrets']) await tx(s, true, st => st.clear()); }
+    Object.keys(localStorage).filter(k => k.startsWith('cn_')).forEach(k => localStorage.removeItem(k));
+    mem.kv = {}; mem.media = {}; mem.secrets = {};
+  }
+  return { init, get, set, del, keys, clearAll, get mode(){ return mode; } };
+})();
+
+async function requestPersist(){
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      const already = await navigator.storage.persisted();
+      if(already) return true;
+      return await navigator.storage.persist();
+    }
+  }catch(e){}
+  return false;
+}
+
+/* ---------- App state ---------- */
+const DEFAULT_BELLS = [
+  {n:1, start:'08:00', end:'08:45'}, {n:2, start:'08:45', end:'09:30'},
+  {n:3, start:'09:50', end:'10:35'}, {n:4, start:'10:35', end:'11:20'},
+  {n:5, start:'11:35', end:'12:20'}, {n:6, start:'12:20', end:'13:05'},
+  {n:7, start:'13:15', end:'14:00'}, {n:8, start:'14:00', end:'14:45'}
+];
+const CLASS_COLORS = ['#d4af37','#7fb0d8','#6fbf8a','#e0685a','#b58be0','#e39a4f','#5fc4c0','#d97fa9','#a3b85c','#c9c9c9'];
+
+function freshState(){
+  return {
+    v: 1,
+    settings: {
+      userName:'', school:'', theme:'dark', days:[0,1,2,3,4,5], bells: DEFAULT_BELLS.map(b => ({...b})),
+      defaultHwMode:'next', eventLeadDays:1, notify:false, lastBackup:null, onboarded:false, pinHash:null, pinSalt:null,
+      ai:{provider:'gemini', model:'', connected:false}, hideBuiltin:false, calendarVersion:0
+    },
+    classes: [], subjects: [], slots: [], lessons: {}, tasks: [], events: [], trash: [],
+    seen: {} // notification bookkeeping: id -> ISO
+  };
+}
+let S = freshState();
+let saveTimer = null;
+function save(now=false){
+  clearTimeout(saveTimer);
+  const run = async () => {
+    try{ await Store.set('kv', 'state', JSON.parse(JSON.stringify(S))); }
+    catch(e){ logErr('save: ' + e.message); toast('השמירה נכשלה — כדאי לגבות עכשיו מההגדרות', true); }
+  };
+  if(now) return run();
+  saveTimer = setTimeout(run, 250);
+}
+async function loadState(){
+  let st = null;
+  try{ st = await Store.get('kv', 'state'); }catch(e){ logErr('load: ' + e.message); }
+  if(st && typeof st === 'object'){
+    const base = freshState();
+    S = Object.assign(base, st);
+    S.settings = Object.assign(base.settings, st.settings || {});
+    S.settings.ai = Object.assign(freshState().settings.ai, (st.settings||{}).ai || {});
+  }
+}
+
+/* ---------- lookups ---------- */
+const cls = id => S.classes.find(c => c.id === id);
+const sub = id => S.subjects.find(s => s.id === id);
+const slot = id => S.slots.find(s => s.id === id);
+const bell = n => S.settings.bells.find(b => b.n === n);
+function slotLabel(sl){
+  if(!sl) return '';
+  const c = cls(sl.classId), s = sub(sl.subjectId);
+  return [s && s.name, c && c.name].filter(Boolean).join(' · ') || 'שיעור';
+}
+function classDot(id){ const c = cls(id); return c ? `<span class="chip-dot" style="background:${esc(c.color)}"></span>` : ''; }
+/* ---------- Encrypted API keys (AES-GCM 256, non-extractable) ---------- */
+const Vault = (() => {
+  let key = null;
+  const cache = {gemini:'', claude:'', openai:''};
+  async function getKey(){
+    if(key) return key;
+    if(!(window.crypto && crypto.subtle)) throw new Error('no-crypto');
+    try{ key = await Store.get('secrets', 'aesKey'); }catch(e){}
+    if(!key){
+      key = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+      try{ await Store.set('secrets', 'aesKey', key); }catch(e){ logErr('vault key store: ' + e.message); }
+    }
+    return key;
+  }
+  async function put(provider, plain){
+    plain = cleanKey(plain);
+    if(!plain){ await Store.del('secrets', 'k_' + provider); cache[provider] = ''; return; }
+    const k = await getKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, k, new TextEncoder().encode(plain));
+    // verify round-trip before trusting it
+    const back = new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM', iv}, k, ct));
+    if(back !== plain) throw new Error('verify-failed');
+    await Store.set('secrets', 'k_' + provider, {iv: Array.from(iv), ct});
+    cache[provider] = plain;
+  }
+  async function load(){
+    for(const p of Object.keys(cache)){
+      try{
+        const rec = await Store.get('secrets', 'k_' + p);
+        if(rec && rec.ct){
+          const k = await getKey();
+          cache[p] = new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:new Uint8Array(rec.iv)}, k, rec.ct));
+        }
+      }catch(e){ logErr('vault load ' + p + ': ' + e.message); }
+    }
+  }
+  const get = p => cache[p] || '';
+  return {put, load, get};
+})();
+function cleanKey(k){
+  // a key field may hold several keys separated by comma/newline + hidden chars — take the first clean one
+  return String(k || '').split(/[\s,;]+/).map(s => s.replace(/[^\x21-\x7E]/g, '')).find(Boolean) || '';
+}
+
+/* ---------- Built-in Ministry of Education calendar — תשפ"ז (2026-27), state schools ----------
+   Source: חוזר מנכ"ל "לוח החופשות והחגים תשפ"ז" as republished (israelhayom.co.il, pop.education.gov.il).
+   Every item is editable/hideable by the user. Vacations mark noSchool = lessons are skipped. */
+const CAL_VERSION = 1;
+const BUILTIN_EVENTS = [
+  {id:'moe-open',    title:'פתיחת שנת הלימודים תשפ"ז', date:'2026-09-01', type:'special'},
+  {id:'moe-rh',      title:'חופשת ראש השנה', date:'2026-09-11', end:'2026-09-13', type:'holiday', noSchool:true},
+  {id:'moe-yk',      title:'חופשת יום כיפור', date:'2026-09-20', end:'2026-09-21', type:'holiday', noSchool:true},
+  {id:'moe-sukkot',  title:'חופשת סוכות', date:'2026-09-25', end:'2026-10-03', type:'holiday', noSchool:true},
+  {id:'moe-rabin',   title:'יום הזיכרון ליצחק רבין', date:'2026-10-22', type:'ceremony', note:'י"ב בחשוון חל בשישי — מצוין ביום חמישי. לוודא מול בית הספר.'},
+  {id:'moe-hanukka', title:'חופשת חנוכה', date:'2026-12-06', end:'2026-12-12', type:'holiday', noSchool:true},
+  {id:'moe-tubishvat', title:'ט"ו בשבט', date:'2027-01-22', type:'special'},
+  {id:'moe-purim',   title:'חופשת פורים', date:'2027-03-23', end:'2027-03-24', type:'holiday', noSchool:true, note:'תענית אסתר (22.3) היא יום לימודים רגיל.'},
+  {id:'moe-pesach',  title:'חופשת פסח', date:'2027-04-13', end:'2027-04-28', type:'holiday', noSchool:true},
+  {id:'moe-shoah',   title:'יום הזיכרון לשואה ולגבורה', date:'2027-05-04', type:'ceremony'},
+  {id:'moe-zikaron', title:'יום הזיכרון לחללי מערכות ישראל ונפגעי פעולות האיבה', date:'2027-05-11', type:'ceremony'},
+  {id:'moe-atzmaut', title:'יום העצמאות', date:'2027-05-12', type:'holiday', noSchool:true},
+  {id:'moe-lagbaomer', title:'ל"ג בעומר', date:'2027-05-25', type:'holiday', noSchool:true},
+  {id:'moe-yerushalayim', title:'יום ירושלים', date:'2027-06-04', type:'special', note:'כ"ח באייר חל בשישי — ייתכן שיצוין בבית הספר ביום אחר.'},
+  {id:'moe-shavuot', title:'חופשת שבועות', date:'2027-06-10', end:'2027-06-12', type:'holiday', noSchool:true},
+  {id:'moe-lastday', title:'יום הלימודים האחרון ביסודי', date:'2027-06-30', type:'special'},
+  {id:'moe-summer',  title:'החופש הגדול', date:'2027-07-01', end:'2027-08-31', type:'holiday', noSchool:true}
+];
+const EVENT_TYPES = {
+  holiday:{label:'חופשה', ic:'🏖️'}, ceremony:{label:'טקס', ic:'🕯️'}, parents:{label:'יום הורים / אסיפה', ic:'👨‍👩‍👧'},
+  special:{label:'יום מיוחד', ic:'⭐'}, trip:{label:'טיול / סיור', ic:'🚌'}, exam:{label:'מבחן', ic:'📝'},
+  meeting:{label:'ישיבת צוות', ic:'🗂️'}, other:{label:'אחר', ic:'📌'}
+};
+function mergeBuiltinCalendar(){
+  if((S.settings.calendarVersion||0) >= CAL_VERSION) return;
+  for(const b of BUILTIN_EVENTS){
+    const ex = S.events.find(e => e.id === b.id);
+    const rec = {...b, builtin:true, hidden: ex ? !!ex.hidden : false};
+    if(ex && ex.userEdited) continue; // user's edit wins
+    if(ex) Object.assign(ex, rec); else S.events.push(rec);
+  }
+  S.settings.calendarVersion = CAL_VERSION;
+  save();
+}
+
+/* ---------- schedule engine ---------- */
+function eventsOn(date){
+  return S.events.filter(e => !e.hidden && !e.deleted && date >= e.date && date <= (e.end || e.date));
+}
+function isNoSchool(date){
+  const wd = pd(date).getDay();
+  if(!S.settings.days.includes(wd)) return {reason:'יום חופשי במערכת שלך'};
+  const ev = eventsOn(date).find(e => e.noSchool);
+  return ev ? {reason: ev.title, ev} : null;
+}
+function slotsForWeekday(wd){
+  return S.slots.filter(s => s.day === wd && s.classId).sort((a,b) => a.period - b.period);
+}
+function lessonsOn(date){
+  if(isNoSchool(date)) return [];
+  return slotsForWeekday(pd(date).getDay()).map(sl => ({date, slot:sl, bell:bell(sl.period)})).filter(x => x.bell);
+}
+const lessonKey = (date, slotId) => `${date}|${slotId}`;
+function nextLesson(classId, subjectId, fromDate, fromMinute){
+  for(let i = 0; i < 240; i++){
+    const date = addDays(fromDate, i);
+    const list = lessonsOn(date).filter(x => x.slot.classId === classId && (!subjectId || x.slot.subjectId === subjectId));
+    const hit = list.find(x => i > 0 || toMin(x.bell.start) > fromMinute);
+    if(hit) return {date, slotId: hit.slot.id, time: hit.bell.start};
+  }
+  return null;
+}
+function prevLessonRecord(classId, subjectId, beforeKey){
+  const rec = Object.values(S.lessons)
+    .filter(l => l.classId === classId && l.subjectId === subjectId && (l.summary || (l.transcripts||[]).length) && l.key < beforeKey)
+    .sort((a,b) => a.key < b.key ? 1 : -1);
+  return rec[0] || null;
+}
+
+/* ---------- tasks & reminders ---------- */
+function taskDueAt(t){ return t.dueDate ? pd(t.dueDate).getTime() + toMin(t.dueTime || '07:30') * 60000 : Infinity; }
+function isTaskDueNow(t){ return !t.done && !t.deleted && taskDueAt(t) <= Date.now(); }
+function openTasks(){ return S.tasks.filter(t => !t.done && !t.deleted); }
+function dueTasks(){
+  const today = todayStr();
+  return openTasks().filter(t => t.dueDate && t.dueDate <= today).sort((a,b) => taskDueAt(a) - taskDueAt(b));
+}
+function upcomingEvents(days=21){
+  const today = todayStr(), lim = addDays(today, days);
+  return S.events.filter(e => !e.hidden && !e.deleted && (e.end || e.date) >= today && e.date <= lim)
+    .sort((a,b) => a.date < b.date ? -1 : 1);
+}
+function eventAlerts(){
+  const today = todayStr();
+  return upcomingEvents(30).filter(e => {
+    const lead = e.lead != null ? e.lead : S.settings.eventLeadDays;
+    return dayDiff(today, e.date) <= lead && dayDiff(today, e.date) >= 0;
+  });
+}
+function alertCount(){ return dueTasks().length + eventAlerts().filter(e => !e.noSchool || dayDiff(todayStr(), e.date) <= 1).length; }
+function refreshAlertDot(){
+  const n = alertCount(), d = $('#alertDot');
+  d.hidden = !n; d.textContent = n > 9 ? '9+' : n;
+  $('#btnAlerts').setAttribute('aria-label', n ? `${n} תזכורות פתוחות` : 'אין תזכורות פתוחות');
+}
+function describeDue(t){
+  if(!t.dueDate) return 'בלי תאריך';
+  const sl = t.dueSlotId && slot(t.dueSlotId);
+  const when = relDay(t.dueDate) + (t.dueTime ? ` · ${t.dueTime}` : '');
+  return sl ? `${when} · שיעור ${sl.period}` : when;
+}
+
+/* ---------- system notifications (only while app is alive — honest limit) ---------- */
+async function sysNotify(title, body, tag){
+  if(!S.settings.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
+  try{
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if(reg && reg.showNotification) await reg.showNotification(title, {body, tag, icon:'icon-192.png', badge:'icon-192.png', lang:'he', dir:'rtl'});
+    else new Notification(title, {body, tag, icon:'icon-192.png'});
+  }catch(e){ logErr('notify: ' + e.message); }
+}
+function reminderTick(){
+  let changed = false;
+  for(const t of openTasks()){
+    if(isTaskDueNow(t) && !t.notifiedAt){
+      t.notifiedAt = new Date().toISOString(); changed = true;
+      const c = cls(t.classId);
+      sysNotify(t.kind === 'hw' ? '📚 לבדוק שיעורי בית' : '📌 תזכורת', [t.title, c && c.name].filter(Boolean).join(' · '), 'task-' + t.id);
+    }
+  }
+  const today = todayStr();
+  for(const e of eventAlerts()){
+    const k = `ev:${e.id}:${today}`;
+    if(!S.seen[k]){
+      S.seen[k] = 1; changed = true;
+      sysNotify('📅 ' + e.title, relDay(e.date) + (e.time ? ` · ${e.time}` : ''), 'ev-' + e.id);
+    }
+  }
+  if(changed){ pruneSeen(); save(); }
+  refreshAlertDot();
+}
+function pruneSeen(){
+  const lim = addDays(todayStr(), -40);
+  for(const k of Object.keys(S.seen)){ const m = k.match(/(\d{4}-\d{2}-\d{2})$/); if(m && m[1] < lim) delete S.seen[k]; }
+}
+
+/* ---------- .ics export (reliable real-time alert via the phone's calendar) ---------- */
+function icsEscape(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/[,;]/g, m => '\\' + m); }
+function icsDT(date, time){ return date.replace(/-/g,'') + (time ? 'T' + time.replace(':','') + '00' : ''); }
+function buildICS(items){
+  const stamp = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//AppNest//ClassNest//HE','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  for(const it of items){
+    lines.push('BEGIN:VEVENT', `UID:${it.uid}@classnest.appnest`, `DTSTAMP:${stamp}`);
+    if(it.time){
+      lines.push(`DTSTART:${icsDT(it.date, it.time)}`);
+      const endMin = toMin(it.time) + (it.minutes || 30);
+      lines.push(`DTEND:${icsDT(it.date, pad(Math.floor(endMin/60) % 24) + ':' + pad(endMin % 60))}`);
+    }else{
+      lines.push(`DTSTART;VALUE=DATE:${icsDT(it.date)}`, `DTEND;VALUE=DATE:${icsDT(addDays(it.end || it.date, 1))}`);
+    }
+    lines.push(`SUMMARY:${icsEscape(it.title)}`);
+    if(it.desc) lines.push(`DESCRIPTION:${icsEscape(it.desc)}`);
+    lines.push('BEGIN:VALARM','ACTION:DISPLAY',`DESCRIPTION:${icsEscape(it.title)}`, `TRIGGER:${it.time ? '-PT10M' : '-PT15H'}`, 'END:VALARM', 'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+async function shareOrDownload(filename, content, mime){
+  const blob = content instanceof Blob ? content : new Blob([content], {type: mime});
+  try{
+    const file = new File([blob], filename, {type: mime});
+    if(navigator.canShare && navigator.canShare({files:[file]}) && /\.ics$/.test(filename)){
+      await navigator.share({files:[file], title: filename});
+      return;
+    }
+  }catch(e){ if(e && e.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function taskToIcs(t){
+  const c = cls(t.classId), s = sub(t.subjectId);
+  return {uid:'task-' + t.id, date:t.dueDate, time:t.dueTime || '07:30', minutes:15,
+    title:(t.kind === 'hw' ? 'לבדוק שיעורי בית: ' : '') + t.title,
+    desc:[s && s.name, c && c.name, t.notes].filter(Boolean).join(' · ')};
+}
+function eventToIcs(e){ return {uid:'ev-' + e.id, date:e.date, end:e.end, time:e.time || '', minutes:60, title:e.title, desc:e.note || ''}; }
+/* ---------- navigation ---------- */
+let current = 'home', params = {};
+const RENDER = {};
+function go(name, p={}, push=true){
+  if(name !== 'lesson' && current === 'lesson') stopAllRecording();
+  current = name; params = p;
+  $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'scr-' + name));
+  (RENDER[name] || (() => {}))(p);
+  if(push){ try{ history.pushState({name, p}, ''); }catch(e){} }
+  window.scrollTo(0,0);
+  const h = $('#scr-' + name + ' h1'); if(h){ h.setAttribute('tabindex','-1'); h.focus({preventScroll:true}); }
+}
+window.addEventListener('popstate', e => {
+  if($('.modal-bg')){ closeModal(); try{ history.pushState({name:current, p:params}, ''); }catch(_){} return; }
+  const st = e.state; go(st && st.name ? st.name : 'home', st && st.p || {}, false);
+});
+function rerender(){ (RENDER[current] || (() => {}))(params); refreshAlertDot(); }
+function head(title, extra=''){
+  return `<div class="screen-head"><button class="back" data-go="home" aria-label="חזרה לדף הבית">→ בית</button><h1>${esc(title)}</h1>${extra}</div>`;
+}
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]');
+  if(g){ e.preventDefault(); go(g.dataset.go, g.dataset.p ? JSON.parse(g.dataset.p) : {}); }
+});
+
+/* ---------- modal with focus-trap + Escape ---------- */
+let modalCloseCb = null, lastFocus = null;
+function openModal(html, onMount, onClose){
+  closeModal(true);
+  lastFocus = document.activeElement;
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  $('#modalRoot').appendChild(bg);
+  bg.addEventListener('mousedown', e => { if(e.target === bg) closeModal(); });
+  const m = $('.modal', bg);
+  m.addEventListener('keydown', e => {
+    if(e.key === 'Escape'){ e.preventDefault(); closeModal(); }
+    if(e.key === 'Tab'){
+      const f = $$('button,input,select,textarea,a[href],audio', m).filter(x => !x.disabled && x.offsetParent !== null);
+      if(!f.length) return;
+      if(e.shiftKey && document.activeElement === f[0]){ e.preventDefault(); f[f.length-1].focus(); }
+      else if(!e.shiftKey && document.activeElement === f[f.length-1]){ e.preventDefault(); f[0].focus(); }
+    }
+  });
+  modalCloseCb = onClose || null;
+  if(onMount) onMount(m, bg);
+  const first = $('input,select,textarea', m) || $('button', m);
+  if(first) setTimeout(() => first.focus(), 30);
+  return m;
+}
+function closeModal(silent){
+  const bg = $('.modal-bg'); if(!bg) return;
+  bg.remove();
+  const cb = modalCloseCb; modalCloseCb = null;
+  if(cb && !silent) cb();
+  if(lastFocus && lastFocus.focus) try{ lastFocus.focus(); }catch(e){}
+}
+function confirmBox(msg, okText='אישור', danger=false){
+  return new Promise(res => {
+    let done = false;
+    openModal(`<h2>${esc(msg)}</h2><div class="modal-actions"><button class="btn ${danger?'danger':'primary'}" id="cOk">${esc(okText)}</button><button class="btn" id="cNo">ביטול</button></div>`,
+      m => {
+        $('#cOk', m).onclick = () => { done = true; closeModal(true); res(true); };
+        $('#cNo', m).onclick = () => { done = true; closeModal(true); res(false); };
+      }, () => { if(!done) res(false); });
+  });
+}
+
+/* ---------- long-press = edit (plus a visible edit button everywhere) ---------- */
+function longPress(el, fn){
+  let t = null, sx = 0, sy = 0, fired = false;
+  el.addEventListener('pointerdown', e => { fired = false; sx = e.clientX; sy = e.clientY; t = setTimeout(() => { fired = true; hapt(25); fn(); }, 550); });
+  const cancel = () => clearTimeout(t);
+  el.addEventListener('pointerup', cancel); el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointermove', e => { if(Math.abs(e.clientX-sx) > 10 || Math.abs(e.clientY-sy) > 10) cancel(); });
+  el.addEventListener('click', e => { if(fired){ e.stopPropagation(); e.preventDefault(); fired = false; } }, true);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* ---------- theme ---------- */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', S.settings.theme === 'light' ? 'light' : 'dark');
+  $('#btnTheme').textContent = S.settings.theme === 'light' ? '🌙' : '☀️';
+  $('meta[name=theme-color]').setAttribute('content', S.settings.theme === 'light' ? '#f7f3e8' : '#060606');
+}
+$('#btnTheme').onclick = () => { S.settings.theme = S.settings.theme === 'light' ? 'dark' : 'light'; applyTheme(); save(); };
+$('#btnAbout').onclick = () => go('about');
+$('#btnAlerts').onclick = () => showReminderSheet(true);
+
+/* =====================================================================
+   HOME — "היום שלי"
+   ===================================================================== */
+function taskRow(t, opts={}){
+  const c = cls(t.classId), s = sub(t.subjectId);
+  const overdue = t.dueDate && t.dueDate < todayStr() && !t.done;
+  return `<div class="item" data-task="${t.id}">
+    <button class="check ${t.done?'on':''}" data-toggle="${t.id}" aria-label="${t.done?'סמן כלא בוצע':'סמן כבוצע'}: ${esc(t.title)}">${t.done?'✓':''}</button>
+    <div class="item-main" data-open-task="${t.id}">
+      <div class="item-title">${t.kind==='hw'?'📚 ':''}${esc(t.title)}</div>
+      <div class="item-meta">${c?classDot(c.id)+esc(c.name):''}${s?`<span>${esc(s.name)}</span>`:''}
+        <span class="tag ${overdue?'warn':''}">${overdue?'באיחור · ':''}${esc(describeDue(t))}</span></div>
+    </div>
+    ${opts.noEdit?'':`<button class="edit-btn" data-open-task="${t.id}" aria-label="עריכה">✏️</button>`}
+  </div>`;
+}
+function bindTaskRows(root){
+  $$('[data-toggle]', root).forEach(b => b.onclick = e => { e.stopPropagation(); toggleTask(b.dataset.toggle); });
+  $$('[data-open-task]', root).forEach(b => b.onclick = () => editTask(S.tasks.find(t => t.id === b.dataset.openTask)));
+  $$('.item[data-task]', root).forEach(el => longPress(el, () => editTask(S.tasks.find(t => t.id === el.dataset.task))));
+}
+function toggleTask(id){
+  const t = S.tasks.find(x => x.id === id); if(!t) return;
+  t.done = !t.done; t.doneAt = t.done ? new Date().toISOString() : null;
+  hapt(); save(); rerender();
+  if(t.done) toast('סומן כבוצע ✓');
+}
+function eventRow(e){
+  const ty = EVENT_TYPES[e.type] || EVENT_TYPES.other;
+  const range = e.end && e.end !== e.date ? `${fmtDate(e.date,false)} – ${fmtDate(e.end,false)}` : fmtDate(e.date);
+  return `<div class="item" data-ev="${e.id}">
+    <div style="font-size:22px" aria-hidden="true">${ty.ic}</div>
+    <div class="item-main"><div class="item-title">${esc(e.title)}</div>
+      <div class="item-meta"><span>${esc(range)}${e.time?' · '+esc(e.time):''}</span>
+      ${e.noSchool?'<span class="tag info">אין לימודים</span>':''}${e.builtin?'<span class="tag">משרד החינוך</span>':''}
+      ${dayDiff(todayStr(), e.date) >= 0 && dayDiff(todayStr(), e.date) <= 7 ? `<span class="tag ok">${esc(relDay(e.date))}</span>`:''}</div>
+      ${e.note?`<div class="hint">${esc(e.note)}</div>`:''}</div>
+    <button class="edit-btn" data-open-ev="${e.id}" aria-label="עריכה">✏️</button></div>`;
+}
+function bindEventRows(root){
+  $$('[data-ev]', root).forEach(el => { el.onclick = () => editEvent(S.events.find(e => e.id === el.dataset.ev)); longPress(el, () => editEvent(S.events.find(e => e.id === el.dataset.ev))); });
+}
+
+function nextSchoolDay(from){
+  for(let i = 1; i < 120; i++){ const d = addDays(from, i); if(lessonsOn(d).length) return d; }
+  return null;
+}
+function renderBells(date){
+  const lessons = lessonsOn(date);
+  if(!lessons.length) return '';
+  const isToday = date === todayStr(), nm = nowMin();
+  const first = lessons[0].bell.n, last = lessons[lessons.length-1].bell.n;
+  const rows = S.settings.bells.filter(b => b.n >= first && b.n <= last).map(b => {
+    const L = lessons.find(x => x.bell.n === b.n);
+    const now = isToday && nm >= toMin(b.start) && nm < toMin(b.end);
+    const past = isToday && nm >= toMin(b.end);
+    if(!L) return `<div class="bell free ${past?'past':''}" aria-label="שיעור ${b.n} חלון"><div class="bell-n">${b.n}</div><div><div class="bell-title">חלון</div><div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi></div></div><span></span></div>`;
+    const key = lessonKey(date, L.slot.id), rec = S.lessons[key];
+    const checks = openTasks().filter(t => t.dueSlotId === L.slot.id && t.dueDate === date);
+    const c = cls(L.slot.classId);
+    return `<button class="bell ${now?'now':''} ${past?'past':''}" data-lesson="${esc(key)}" aria-label="שיעור ${b.n}: ${esc(slotLabel(L.slot))}${now?' — עכשיו':''}">
+      <div class="bell-n">${b.n}</div>
+      <div><div class="bell-title">${classDot(L.slot.classId)} ${esc(slotLabel(L.slot))}</div>
+        <div class="bell-t"><bdi class="t">${b.start}–${b.end}</bdi>${L.slot.room?' · '+esc(L.slot.room):''}${now?' · <b style="color:var(--gold)">עכשיו</b>':''}</div></div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        ${checks.length?`<span class="tag warn">לבדוק ${checks.length}</span>`:''}
+        ${rec && (rec.summary || (rec.audio||[]).length)?'<span class="tag ok">סוכם ✓</span>':''}
+      </div></button>`;
+  }).join('');
+  return `<div class="bells">${rows}</div>`;
+}
+RENDER.home = () => {
+  const el = $('#scr-home'), today = todayStr(), d = new Date();
+  const greet = d.getHours() < 12 ? 'בוקר טוב' : d.getHours() < 17 ? 'צהריים טובים' : 'ערב טוב';
+  let html = `<div class="hero"><p class="hero-date">${esc(fmtDate(today))}</p>
+    <div class="hero-sub">${greet}${S.settings.userName ? ', ' + esc(S.settings.userName) : ''}${S.settings.school ? ' · ' + esc(S.settings.school) : ''}</div></div>`;
+  if(!S.slots.some(s => s.classId)){
+    html += `<div class="card empty"><p style="font-family:var(--serif);font-size:22px;color:var(--ink);font-weight:700;margin:0">בוא נבנה את מערכת השעות שלך</p>
+      <p>מגדירים פעם אחת את הצלצולים, הכיתות והמקצועות, ואז ממלאים את הטבלה השבועית. מכאן האפליקציה יודעת לבד מתי השיעור הבא של כל כיתה.</p>
+      <button class="btn primary" data-go="setup">להגדרת בית הספר</button></div>`;
+  }else{
+    const ns = isNoSchool(today);
+    if(ns){
+      const nx = nextSchoolDay(today);
+      html += `<div class="noschool"><b>${esc(ns.reason)}</b>${nx ? `<span class="muted">יום הלימודים הבא: ${esc(fmtDate(nx))}</span>` : ''}</div>`;
+      if(nx){ html += `<h2>${esc(fmtDate(nx))}</h2>` + renderBells(nx); }
+    }else{
+      html += renderBells(today);
+      const nm = nowMin(), lessons = lessonsOn(today);
+      if(lessons.length && nm >= toMin(lessons[lessons.length-1].bell.end)){
+        const nx = nextSchoolDay(today);
+        if(nx) html += `<p class="muted small">היום נגמר. ${esc(relDay(nx))} מתחילים ב-${esc(lessonsOn(nx)[0].bell.start)} עם ${esc(slotLabel(lessonsOn(nx)[0].slot))}.</p>`;
+      }
+    }
+  }
+  const due = dueTasks();
+  html += `<div class="section-row"><h2>לטיפול עכשיו</h2>${due.length?`<span class="tag warn">${due.length}</span>`:''}</div>`;
+  html += due.length ? `<div class="card">${due.map(t => taskRow(t)).join('')}</div>` : `<p class="muted">אין משימות פתוחות להיום. 👌</p>`;
+  const soon = openTasks().filter(t => t.dueDate && t.dueDate > today && dayDiff(today, t.dueDate) <= 3);
+  if(soon.length) html += `<h3 class="muted">בימים הקרובים</h3><div class="card">${soon.map(t => taskRow(t)).join('')}</div>`;
+  const evs = upcomingEvents(14);
+  html += `<h2>אירועים קרובים</h2>` + (evs.length ? `<div class="card">${evs.slice(0,6).map(eventRow).join('')}</div>` : `<p class="muted">אין אירועים בשבועיים הקרובים.</p>`);
+  html += `<nav class="tiles" aria-label="מסכים">
+    <button class="tile" data-go="timetable"><span class="ic">🗓️</span><b>מערכת שעות</b><span>הטבלה השבועית</span></button>
+    <button class="tile" data-go="tasks"><span class="ic">📚</span><b>משימות ושיעורי בית</b><span>${openTasks().length} פתוחות</span></button>
+    <button class="tile" data-go="events"><span class="ic">📅</span><b>לוח אירועים</b><span>טקסים, חופשות, ימי הורים</span></button>
+    <button class="tile" data-go="journal"><span class="ic">📝</span><b>יומן שיעורים</b><span>כל הסיכומים לפי כיתה</span></button>
+    <button class="tile" data-go="settings"><span class="ic">⚙️</span><b>הגדרות</b><span>גיבוי, בינה, נעילה</span></button>
+    <button class="tile" data-go="setup"><span class="ic">🏫</span><b>בית הספר</b><span>צלצולים, כיתות, מקצועות</span></button>
+  </nav>
+  <p class="badge-foot">נבנה ב-<b>AppNest</b> · גרסה ${APP_VERSION}</p>
+  <button class="fab" id="fabAdd" aria-label="הוסף תזכורת">＋ תזכורת</button>`;
+  el.innerHTML = html;
+  $$('[data-lesson]', el).forEach(b => b.onclick = () => go('lesson', {key: b.dataset.lesson}));
+  bindTaskRows(el); bindEventRows(el);
+  $('#fabAdd').onclick = () => editTask(null, {});
+  refreshAlertDot();
+};
+
+/* ---------- reminder sheet (shown on open when something is due) ---------- */
+function showReminderSheet(manual){
+  const due = dueTasks(), evs = eventAlerts();
+  if(!manual && !due.length && !evs.length) return;
+  openModal(`<h2>🔔 התזכורות שלך</h2>
+    ${due.length ? `<h3>לטיפול</h3><div>${due.map(t => taskRow(t, {noEdit:true})).join('')}</div>` : ''}
+    ${evs.length ? `<h3>אירועים קרובים</h3><div>${evs.map(eventRow).join('')}</div>` : ''}
+    ${!due.length && !evs.length ? '<p class="muted">הכול מסודר — אין תזכורות פתוחות.</p>' : ''}
+    <div class="modal-actions"><button class="btn primary" id="rsOk">הבנתי</button></div>`,
+    m => {
+      $('#rsOk', m).onclick = () => closeModal();
+      $$('[data-toggle]', m).forEach(b => b.onclick = () => { toggleTask(b.dataset.toggle); b.classList.toggle('on'); b.textContent = b.classList.contains('on') ? '✓' : ''; });
+      $$('[data-open-task]', m).forEach(b => b.onclick = () => { closeModal(true); editTask(S.tasks.find(t => t.id === b.dataset.openTask)); });
+      $$('[data-ev]', m).forEach(b => b.onclick = () => { closeModal(true); editEvent(S.events.find(e => e.id === b.dataset.ev)); });
+    });
+}
+/* =====================================================================
+   TIMETABLE
+   ===================================================================== */
+RENDER.timetable = () => {
+  const el = $('#scr-timetable'), days = S.settings.days.slice().sort(), todayWd = new Date().getDay();
+  let html = head('מערכת שעות');
+  if(!S.classes.length || !S.subjects.length){
+    html += `<div class="banner info">כדי למלא את הטבלה צריך קודם להוסיף כיתות ומקצועות. <button class="btn sm" data-go="setup">להגדרת בית הספר</button></div>`;
+  }
+  html += `<p class="muted small">הקש על משבצת כדי לשבץ כיתה ומקצוע. הקשה על משבצת מלאה פותחת עריכה.</p>
+  <div class="tt-wrap"><table class="tt"><thead><tr><th></th>${days.map(d => `<th scope="col" ${d===todayWd?'style="color:var(--gold)"':''}>${DAYS[d]}</th>`).join('')}</tr></thead><tbody>`;
+  for(const b of S.settings.bells){
+    html += `<tr><th class="pn" scope="row" title="${b.start}–${b.end}">${b.n}</th>`;
+    for(const d of days){
+      const sl = S.slots.find(s => s.day === d && s.period === b.n && s.classId);
+      if(sl){
+        const c = cls(sl.classId), s = sub(sl.subjectId);
+        html += `<td><button class="cell ${d===todayWd?'today':''}" data-cell="${d}|${b.n}" style="border-inline-start:4px solid ${esc(c?c.color:'var(--line)')}" aria-label="${DAYS[d]} שיעור ${b.n}: ${esc(slotLabel(sl))}"><b>${esc(c?c.name:'')}</b><span>${esc(s?s.name:'')}</span></button></td>`;
+      }else html += `<td><button class="cell empty-c" data-cell="${d}|${b.n}" aria-label="${DAYS[d]} שיעור ${b.n}: ריק">＋</button></td>`;
+    }
+    html += '</tr>';
+  }
+  html += `</tbody></table></div>
+  <div class="btn-row"><button class="btn" data-go="setup">🏫 צלצולים, כיתות ומקצועות</button><button class="btn" id="ttPrint">🖨️ הדפס / PDF</button></div>
+  <p class="hint">שבוע לימודים: ${days.map(d => DAYS[d]).join(', ')}. אפשר לשנות בהגדרות בית הספר.</p>`;
+  el.innerHTML = html;
+  $$('[data-cell]', el).forEach(b => b.onclick = () => { const [d,n] = b.dataset.cell.split('|').map(Number); editSlot(d, n); });
+  $('#ttPrint').onclick = printTimetable;
+};
+function optionList(arr, sel, empty){
+  return (empty ? `<option value="">${esc(empty)}</option>` : '') + arr.map(x => `<option value="${x.id}" ${x.id===sel?'selected':''}>${esc(x.name)}</option>`).join('');
+}
+function editSlot(day, n){
+  const ex = S.slots.find(s => s.day === day && s.period === n);
+  const b = bell(n);
+  openModal(`<h2>${DAYS[day]} · שיעור ${n}</h2><p class="muted"><bdi class="t">${b.start}–${b.end}</bdi></p>
+    <label class="f"><span>כיתה</span><select id="sClass">${optionList(S.classes, ex&&ex.classId, 'בחר כיתה')}<option value="__new">＋ כיתה חדשה…</option></select></label>
+    <label class="f"><span>מקצוע</span><select id="sSub">${optionList(S.subjects, ex&&ex.subjectId, 'בחר מקצוע')}<option value="__new">＋ מקצוע חדש…</option></select></label>
+    <label class="f"><span>חדר / מקום (לא חובה)</span><input type="text" id="sRoom" value="${esc(ex&&ex.room||'')}" placeholder="למשל: מעבדה, חדר 12"></label>
+    <div class="modal-actions"><button class="btn primary" id="sSave">שמור</button>${ex&&ex.classId?'<button class="btn danger" id="sClear">רוקן משבצת</button>':''}<button class="btn" id="sCancel">ביטול</button></div>`,
+    m => {
+      const handleNew = (sel, list, label) => sel.onchange = () => {
+        if(sel.value !== '__new') return;
+        const name = (prompt(label) || '').trim();
+        if(!name){ sel.value = ''; return; }
+        const item = {id: uid(), name};
+        if(list === S.classes) item.color = CLASS_COLORS[S.classes.length % CLASS_COLORS.length];
+        list.push(item); save();
+        sel.innerHTML = optionList(list, item.id, list === S.classes ? 'בחר כיתה' : 'בחר מקצוע') + `<option value="__new">＋ ${list===S.classes?'כיתה חדשה':'מקצוע חדש'}…</option>`;
+      };
+      handleNew($('#sClass', m), S.classes, 'שם הכיתה (למשל ד׳2):');
+      handleNew($('#sSub', m), S.subjects, 'שם המקצוע (למשל מתמטיקה):');
+      $('#sCancel', m).onclick = () => closeModal();
+      $('#sSave', m).onclick = () => {
+        const classId = $('#sClass', m).value, subjectId = $('#sSub', m).value;
+        if(!classId || classId === '__new'){ toast('בחר כיתה', true); return; }
+        const rec = ex || {id: uid(), day, period: n};
+        rec.classId = classId; rec.subjectId = subjectId && subjectId !== '__new' ? subjectId : ''; rec.room = $('#sRoom', m).value.trim();
+        if(!ex) S.slots.push(rec);
+        save(); closeModal(); rerender(); toast('נשמר');
+      };
+      const clr = $('#sClear', m);
+      if(clr) clr.onclick = async () => {
+        if(!(await confirmBox('לרוקן את המשבצת? סיכומי שיעורים קודמים נשמרים ביומן.', 'רוקן', true))) return;
+        ex.classId = ''; ex.subjectId = ''; ex.room = ''; save(); rerender();
+      };
+    });
+}
+function printTimetable(){
+  const days = S.settings.days.slice().sort();
+  let h = `<h1 style="font-family:serif">מערכת שעות${S.settings.userName?' — '+esc(S.settings.userName):''}</h1><p>${esc(S.settings.school||'')} · הודפס ${esc(fmtDate(todayStr()))}</p>
+  <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;text-align:center"><tr><th>#</th>${days.map(d=>`<th>${DAYS[d]}</th>`).join('')}</tr>`;
+  for(const b of S.settings.bells){
+    h += `<tr><th>${b.n}<br><small><bdi class="t">${b.start}–${b.end}</bdi></small></th>` + days.map(d => { const sl = S.slots.find(s => s.day===d && s.period===b.n && s.classId); return `<td>${sl?esc(slotLabel(sl)):''}</td>`; }).join('') + '</tr>';
+  }
+  h += `</table><p style="font-size:12px">ClassNest · AppNest</p>`;
+  doPrint(h);
+}
+function doPrint(html){
+  const pa = $('#printArea'); pa.innerHTML = html;
+  setTimeout(() => { window.print(); }, 60);
+}
+
+/* =====================================================================
+   SETUP — school, bells, classes, subjects
+   ===================================================================== */
+RENDER.setup = () => {
+  const el = $('#scr-setup'), st = S.settings;
+  el.innerHTML = head('בית הספר שלי') + `
+  <div class="row2"><label class="f"><span>השם שלך</span><input type="text" id="uName" value="${esc(st.userName)}" placeholder="יופיע בדוחות ובשיתופים"></label>
+  <label class="f"><span>בית הספר</span><input type="text" id="uSchool" value="${esc(st.school)}" placeholder="שם בית הספר"></label></div>
+  <h2>ימי לימודים</h2><div class="seg" id="daysSeg">${[0,1,2,3,4,5,6].map(d => `<button class="${st.days.includes(d)?'on':''}" data-d="${d}" aria-pressed="${st.days.includes(d)}">${DAYS[d]}</button>`).join('')}</div>
+  <div class="section-row"><h2>כיתות</h2><button class="btn sm" id="addClass">＋ כיתה</button></div>
+  <div class="seg" id="classList">${S.classes.map(c => `<button data-cls="${c.id}"><span class="chip-dot" style="background:${esc(c.color)}"></span> ${esc(c.name)}</button>`).join('') || '<span class="muted">עוד אין כיתות. למשל: ג׳1, ד׳2, ה׳3</span>'}</div>
+  <div class="section-row"><h2>מקצועות</h2><button class="btn sm" id="addSub">＋ מקצוע</button></div>
+  <div class="seg" id="subList">${S.subjects.map(s => `<button data-sub="${s.id}">${esc(s.name)}</button>`).join('') || '<span class="muted">עוד אין מקצועות.</span>'}</div>
+  <div class="btn-row"><button class="btn sm" id="quickSubs">הוסף מקצועות נפוצים ביסודי</button></div>
+  <div class="section-row"><h2>לוח צלצולים</h2><button class="btn sm" id="addBell">＋ שיעור</button></div>
+  <p class="hint">השעות של כל שיעור בבית הספר שלך. משתמשים בהן לתזכורות "בשיעור הבא".</p>
+  <div id="bellEd">${st.bells.map((b,i) => `<div class="row2" style="grid-template-columns:44px 1fr 1fr 44px;align-items:center;margin:6px 0">
+      <b style="font-family:var(--serif);font-size:24px;color:var(--gold);text-align:center">${b.n}</b>
+      <input type="time" data-bs="${i}" value="${b.start}" aria-label="שיעור ${b.n} התחלה"><input type="time" data-be="${i}" value="${b.end}" aria-label="שיעור ${b.n} סיום">
+      <button class="edit-btn" data-bdel="${i}" aria-label="מחק שיעור ${b.n}">🗑️</button></div>`).join('')}</div>
+  <div class="btn-row" style="margin-top:22px"><button class="btn primary block" data-go="timetable">המשך למילוי מערכת השעות</button></div>`;
+  $('#uName').oninput = e => { st.userName = e.target.value.trim(); save(); };
+  $('#uSchool').oninput = e => { st.school = e.target.value.trim(); save(); };
+  $$('#daysSeg button').forEach(b => b.onclick = () => {
+    const d = +b.dataset.d; st.days = st.days.includes(d) ? st.days.filter(x => x !== d) : [...st.days, d].sort();
+    save(); RENDER.setup();
+  });
+  $('#addClass').onclick = () => editNamed('class');
+  $('#addSub').onclick = () => editNamed('subject');
+  $$('[data-cls]').forEach(b => { b.onclick = () => editNamed('class', cls(b.dataset.cls)); });
+  $$('[data-sub]').forEach(b => { b.onclick = () => editNamed('subject', sub(b.dataset.sub)); });
+  $('#quickSubs').onclick = () => {
+    const common = ['עברית','מתמטיקה','אנגלית','מדעים','מולדת','תורה','תנ"ך','היסטוריה','גאוגרפיה','חינוך','חינוך גופני','אמנות','מוזיקה','כישורי חיים'];
+    const pick = common.filter(n => !S.subjects.some(s => s.name === n));
+    openModal(`<h2>מקצועות נפוצים</h2><p class="muted">סמן את מה שאתה מלמד:</p><div class="seg" id="qs">${pick.map(n => `<button data-n="${esc(n)}">${esc(n)}</button>`).join('') || '<span class="muted">כולם כבר ברשימה.</span>'}</div>
+      <div class="modal-actions"><button class="btn primary" id="qsOk">הוסף</button><button class="btn" id="qsNo">ביטול</button></div>`, m => {
+      $$('#qs button', m).forEach(b => b.onclick = () => b.classList.toggle('on'));
+      $('#qsNo', m).onclick = () => closeModal();
+      $('#qsOk', m).onclick = () => { $$('#qs button.on', m).forEach(b => S.subjects.push({id:uid(), name:b.dataset.n})); save(); closeModal(); RENDER.setup(); };
+    });
+  };
+  $('#addBell').onclick = () => {
+    const last = st.bells[st.bells.length-1];
+    const s = last ? last.end : '08:00', e = pad(Math.floor((toMin(s)+45)/60)) + ':' + pad((toMin(s)+45)%60);
+    st.bells.push({n: (last ? last.n : 0) + 1, start: s, end: e}); save(); RENDER.setup();
+  };
+  $$('[data-bs]').forEach(i => i.onchange = () => { st.bells[+i.dataset.bs].start = i.value; save(); });
+  $$('[data-be]').forEach(i => i.onchange = () => { st.bells[+i.dataset.be].end = i.value; save(); });
+  $$('[data-bdel]').forEach(b => b.onclick = async () => {
+    const bl = st.bells[+b.dataset.bdel];
+    const used = S.slots.some(s => s.period === bl.n && s.classId);
+    if(!(await confirmBox(used ? `בשיעור ${bl.n} יש שיבוצים במערכת. למחוק אותו בכל זאת?` : `למחוק את שיעור ${bl.n}?`, 'מחק', true))) return;
+    st.bells.splice(+b.dataset.bdel, 1); S.slots = S.slots.filter(s => s.period !== bl.n); save(); RENDER.setup();
+  });
+};
+function editNamed(kind, item){
+  const isC = kind === 'class', list = isC ? S.classes : S.subjects;
+  const color = item && item.color || CLASS_COLORS[S.classes.length % CLASS_COLORS.length];
+  openModal(`<h2>${item ? 'עריכת' : 'הוספת'} ${isC ? 'כיתה' : 'מקצוע'}</h2>
+    <label class="f"><span>שם</span><input type="text" id="nName" value="${esc(item&&item.name||'')}" placeholder="${isC?'למשל ד׳2':'למשל מתמטיקה'}"></label>
+    ${isC ? `<span class="small" style="font-weight:700">צבע</span><div class="seg" id="nCol">${CLASS_COLORS.map(c => `<button data-c="${c}" class="${c===color?'on':''}" aria-label="צבע ${c}" style="width:40px;padding:0"><span class="chip-dot" style="background:${c};width:18px;height:18px"></span></button>`).join('')}</div>` : ''}
+    <div class="modal-actions"><button class="btn primary" id="nSave">שמור</button>${item?'<button class="btn danger" id="nDel">מחק</button>':''}<button class="btn" id="nNo">ביטול</button></div>`, m => {
+    let col = color;
+    $$('#nCol button', m).forEach(b => b.onclick = () => { col = b.dataset.c; $$('#nCol button', m).forEach(x => x.classList.toggle('on', x === b)); });
+    $('#nNo', m).onclick = () => closeModal();
+    $('#nSave', m).onclick = () => {
+      const name = $('#nName', m).value.trim(); if(!name){ toast('צריך שם', true); return; }
+      if(item){ item.name = name; if(isC) item.color = col; }
+      else list.push(isC ? {id:uid(), name, color:col} : {id:uid(), name});
+      save(); closeModal(); rerender();
+    };
+    const del = $('#nDel', m);
+    if(del) del.onclick = async () => {
+      const inUse = S.slots.filter(s => (isC ? s.classId : s.subjectId) === item.id).length;
+      if(!(await confirmBox(inUse ? `${item.name} משובץ ב-${inUse} משבצות. המחיקה תרוקן אותן (סיכומים קודמים נשמרים). להמשיך?` : `למחוק את ${item.name}?`, 'מחק', true))) return;
+      list.splice(list.indexOf(item), 1);
+      S.slots.forEach(s => { if(isC && s.classId === item.id){ s.classId = ''; s.subjectId = ''; } if(!isC && s.subjectId === item.id) s.subjectId = ''; });
+      save(); rerender();
+    };
+  });
+}
+
+/* =====================================================================
+   TASK editor (homework / general reminder)
+   ===================================================================== */
+function editTask(t, ctx={}){
+  const isNew = !t;
+  const origin = ctx.origin || (t && t.origin) || null; // {date, slotId}
+  const osl = origin && slot(origin.slotId);
+  const draft = t ? {...t} : {id:uid(), kind: ctx.kind || (osl ? 'hw' : 'task'), title:'', notes:'', classId: osl ? osl.classId : (ctx.classId||''), subjectId: osl ? osl.subjectId : (ctx.subjectId||''),
+    dueMode: osl || ctx.classId ? S.settings.defaultHwMode : 'date', dueDate: '', dueTime:'', dueSlotId:'', done:false, createdAt:new Date().toISOString(), origin};
+  if(isNew && draft.dueMode === 'date'){ draft.dueDate = addDays(todayStr(), 1); draft.dueTime = '07:30'; }
+  openModal(`<h2>${isNew ? (draft.kind==='hw'?'שיעורי בית חדשים':'תזכורת חדשה') : 'עריכת תזכורת'}</h2>
+    <div class="seg" id="tKind"><button data-k="hw" class="${draft.kind==='hw'?'on':''}">📚 שיעורי בית</button><button data-k="task" class="${draft.kind==='task'?'on':''}">📌 משימה / תזכורת</button></div>
+    <label class="f"><span id="tTitleLbl">${draft.kind==='hw'?'מה נתת לתלמידים?':'מה צריך לזכור?'}</span><input type="text" id="tTitle" value="${esc(draft.title)}" placeholder="${draft.kind==='hw'?'למשל: עמ׳ 34 תרגילים 1–6':'למשל: להחזיר מבחנים מתוקנים'}"></label>
+    <div class="row2"><label class="f"><span>כיתה</span><select id="tClass">${optionList(S.classes, draft.classId, 'כללי')}</select></label>
+    <label class="f"><span>מקצוע</span><select id="tSub">${optionList(S.subjects, draft.subjectId, '—')}</select></label></div>
+    <span class="small" style="font-weight:700">מתי להזכיר?</span>
+    <div class="seg" id="tMode">
+      <button data-m="next">בשיעור הבא</button><button data-m="tomorrow">מחר בבוקר</button><button data-m="week">בעוד שבוע</button><button data-m="date">תאריך ושעה</button><button data-m="none">בלי תאריך</button></div>
+    <div id="tDateBox" class="row2" hidden><label class="f"><span>תאריך</span><input type="date" id="tDate" value="${esc(draft.dueDate)}"></label><label class="f"><span>שעה</span><input type="time" id="tTime" value="${esc(draft.dueTime||'07:30')}"></label></div>
+    <p class="hint" id="tPreview" aria-live="polite"></p>
+    <label class="f"><span>הערות (לא חובה)</span><textarea id="tNotes" style="min-height:80px" placeholder="פרטים נוספים">${esc(draft.notes)}</textarea></label>
+    ${t && t.done ? '<p class="tag ok">בוצע ✓</p>' : ''}
+    <div class="modal-actions"><button class="btn primary" id="tSave">שמור</button>
+      <button class="btn" id="tIcs" title="הוסף ליומן הטלפון לקבלת התראה בזמן">📲 ליומן הטלפון</button>
+      ${!isNew ? '<button class="btn danger" id="tDel">מחק</button>' : ''}<button class="btn" id="tNo">ביטול</button></div>`,
+  m => {
+    let mode = draft.dueMode || 'date', touched = isNew;
+    const upd = () => {
+      $$('#tMode button', m).forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+      $('#tDateBox', m).hidden = mode !== 'date';
+      const pv = $('#tPreview', m);
+      draft.classId = $('#tClass', m).value; draft.subjectId = $('#tSub', m).value;
+      if(!touched){ pv.textContent = 'תזכורת: ' + describeDue(draft) + (draft.dueDate ? ' · ' + fmtDate(draft.dueDate) : ''); $('#tIcs', m).disabled = !draft.dueDate; return; }
+      if(mode === 'next'){
+        if(!draft.classId){ pv.textContent = 'כדי להזכיר בשיעור הבא צריך לבחור כיתה.'; draft.dueDate = ''; draft.dueSlotId = ''; return; }
+        const from = origin && slot(origin.slotId) ? origin.date : todayStr();
+        const fromMin = origin && slot(origin.slotId) ? toMin((bell(slot(origin.slotId).period)||{end:'00:00'}).end) : nowMin();
+        const nx = nextLesson(draft.classId, draft.subjectId, from, fromMin);
+        if(nx){ draft.dueDate = nx.date; draft.dueTime = nx.time; draft.dueSlotId = nx.slotId; pv.textContent = `יזכיר ${relDay(nx.date) === fmtDate(nx.date) ? 'ב' : relDay(nx.date) + ' — '}${fmtDate(nx.date)} · שיעור ${slot(nx.slotId).period} (${nx.time})`; }
+        else { draft.dueDate = ''; draft.dueSlotId = ''; pv.textContent = 'לא נמצא שיעור של הכיתה הזו במערכת. אפשר לבחור תאריך ידני.'; }
+      }else if(mode === 'tomorrow'){ draft.dueDate = addDays(todayStr(), 1); draft.dueTime = '07:30'; draft.dueSlotId = ''; pv.textContent = `יזכיר ${fmtDate(draft.dueDate)} ב-07:30`; }
+      else if(mode === 'week'){ draft.dueDate = addDays(todayStr(), 7); draft.dueTime = '07:30'; draft.dueSlotId = ''; pv.textContent = `יזכיר ${fmtDate(draft.dueDate)} ב-07:30`; }
+      else if(mode === 'date'){ draft.dueDate = $('#tDate', m).value; draft.dueTime = $('#tTime', m).value; draft.dueSlotId = ''; pv.textContent = draft.dueDate ? `יזכיר ${fmtDate(draft.dueDate)}${draft.dueTime?' ב-'+draft.dueTime:''}` : 'בחר תאריך'; }
+      else { draft.dueDate = ''; draft.dueTime = ''; draft.dueSlotId = ''; pv.textContent = 'יישאר ברשימת המשימות בלי תזכורת.'; }
+      $('#tIcs', m).disabled = !draft.dueDate;
+    };
+    $$('#tKind button', m).forEach(b => b.onclick = () => { draft.kind = b.dataset.k; $$('#tKind button', m).forEach(x => x.classList.toggle('on', x === b)); $('#tTitleLbl', m).textContent = draft.kind==='hw' ? 'מה נתת לתלמידים?' : 'מה צריך לזכור?'; });
+    $$('#tMode button', m).forEach(b => b.onclick = () => { mode = b.dataset.m; touched = true; upd(); });
+    ['#tClass','#tSub','#tDate','#tTime'].forEach(s => $(s, m).onchange = () => { touched = true; upd(); });
+    upd();
+    $('#tNo', m).onclick = () => closeModal();
+    const collect = () => { draft.title = $('#tTitle', m).value.trim(); draft.notes = $('#tNotes', m).value.trim(); draft.dueMode = mode; };
+    $('#tIcs', m).onclick = () => { collect(); if(!draft.title){ toast('כתוב מה להזכיר', true); return; } shareOrDownload('classnest-reminder.ics', buildICS([taskToIcs(draft)]), 'text/calendar'); };
+    $('#tSave', m).onclick = () => {
+      collect();
+      if(!draft.title){ toast(draft.kind==='hw' ? 'כתוב מה נתת לתלמידים' : 'כתוב מה להזכיר', true); return; }
+      if(mode === 'date' && !draft.dueDate){ toast('בחר תאריך', true); return; }
+      if(t && (t.dueDate !== draft.dueDate || t.dueTime !== draft.dueTime)) draft.notifiedAt = null;
+      if(t) Object.assign(t, draft); else S.tasks.push(draft);
+      save(); closeModal(); rerender(); toast(isNew ? 'התזכורת נשמרה' : 'עודכן');
+    };
+    const del = $('#tDel', m);
+    if(del) del.onclick = async () => {
+      if(!(await confirmBox('למחוק את התזכורת? אפשר לשחזר מסל המחזור בהגדרות.', 'מחק', true))) return;
+      t.deleted = true; S.trash.unshift({kind:'task', id:t.id, at:new Date().toISOString(), label:t.title}); save(); rerender(); toast('הועבר לסל המחזור');
+    };
+  });
+}
+
+/* =====================================================================
+   TASKS screen
+   ===================================================================== */
+let taskFilter = {state:'open', classId:''};
+RENDER.tasks = () => {
+  const el = $('#scr-tasks');
+  let list = S.tasks.filter(t => !t.deleted);
+  if(taskFilter.state === 'open') list = list.filter(t => !t.done);
+  if(taskFilter.state === 'done') list = list.filter(t => t.done);
+  if(taskFilter.classId) list = list.filter(t => t.classId === taskFilter.classId);
+  list.sort((a,b) => taskFilter.state === 'done' ? (b.doneAt||'').localeCompare(a.doneAt||'') : taskDueAt(a) - taskDueAt(b));
+  el.innerHTML = head('משימות ושיעורי בית') + `
+    <div class="seg" id="tfState"><button data-s="open">פתוחות</button><button data-s="done">בוצעו</button><button data-s="all">הכול</button></div>
+    <label class="f"><span>כיתה</span><select id="tfClass">${optionList(S.classes, taskFilter.classId, 'כל הכיתות')}</select></label>
+    ${list.length ? `<div class="card">${list.map(t => taskRow(t)).join('')}</div>` : `<div class="empty">${taskFilter.state==='done'?'עוד לא סימנת משימות כבוצעו.':'אין משימות פתוחות. אפשר להוסיף מכאן או מתוך כרטיס שיעור.'}</div>`}
+    <div class="btn-row"><button class="btn" id="tfCsv">⬇️ ייצוא CSV</button></div>
+    <button class="fab" id="tfAdd">＋ תזכורת</button>`;
+  $$('#tfState button').forEach(b => { b.classList.toggle('on', b.dataset.s === taskFilter.state); b.onclick = () => { taskFilter.state = b.dataset.s; RENDER.tasks(); }; });
+  $('#tfClass').onchange = e => { taskFilter.classId = e.target.value; RENDER.tasks(); };
+  $('#tfAdd').onclick = () => editTask(null, {classId: taskFilter.classId});
+  $('#tfCsv').onclick = exportTasksCsv;
+  bindTaskRows(el);
+};
+
+/* =====================================================================
+   EVENTS
+   ===================================================================== */
+let evFilter = 'upcoming';
+RENDER.events = () => {
+  const el = $('#scr-events'), today = todayStr();
+  let list = S.events.filter(e => !e.deleted);
+  if(evFilter === 'upcoming') list = list.filter(e => !e.hidden && (e.end||e.date) >= today);
+  else if(evFilter === 'all') list = list.filter(e => !e.hidden);
+  else list = list.filter(e => e.hidden);
+  list.sort((a,b) => a.date < b.date ? -1 : 1);
+  let html = head('לוח אירועים') + `<div class="seg" id="evSeg"><button data-f="upcoming">קרובים</button><button data-f="all">כל השנה</button><button data-f="hidden">מוסתרים</button></div>
+  <p class="hint">לוח משרד החינוך לתשפ"ז מובנה (חינוך רשמי, חברה יהודית). בימים שמסומנים "אין לימודים" התזכורות מדלגות לשיעור האמיתי הבא. כדאי לוודא מול בית הספר.</p>`;
+  let lastMonth = '';
+  if(!list.length) html += `<div class="empty">${evFilter==='hidden'?'אין אירועים מוסתרים.':'אין אירועים.'}</div>`;
+  else{
+    html += '<div class="card">';
+    for(const e of list){
+      const mk = e.date.slice(0,7);
+      if(mk !== lastMonth){ lastMonth = mk; const d = pd(e.date); html += `<h3 style="color:var(--gold);font-family:var(--serif);font-size:19px">${MONTHS[d.getMonth()]} ${d.getFullYear()}</h3>`; }
+      html += eventRow(e);
+    }
+    html += '</div>';
+  }
+  html += `<div class="btn-row"><button class="btn" id="evIcs">📲 ייצוא האירועים שלי ליומן הטלפון</button></div><button class="fab" id="evAdd">＋ אירוע</button>`;
+  el.innerHTML = html;
+  $$('#evSeg button').forEach(b => { b.classList.toggle('on', b.dataset.f === evFilter); b.onclick = () => { evFilter = b.dataset.f; RENDER.events(); }; });
+  $('#evAdd').onclick = () => editEvent(null);
+  $('#evIcs').onclick = () => {
+    const mine = S.events.filter(e => !e.deleted && !e.hidden && !e.builtin && (e.end||e.date) >= today);
+    const pick = mine.length ? mine : S.events.filter(e => !e.deleted && !e.hidden && (e.end||e.date) >= today);
+    if(!pick.length){ toast('אין אירועים לייצוא', true); return; }
+    shareOrDownload('classnest-events.ics', buildICS(pick.map(eventToIcs)), 'text/calendar');
+  };
+  bindEventRows(el);
+};
+function editEvent(e){
+  const isNew = !e;
+  const d = e ? {...e} : {id:uid(), title:'', type:'parents', date:todayStr(), end:'', time:'', lead:null, noSchool:false, note:''};
+  openModal(`<h2>${isNew ? 'אירוע חדש' : 'עריכת אירוע'}</h2>
+    ${d.builtin ? '<p class="tag">מלוח משרד החינוך</p>' : ''}
+    <label class="f"><span>שם האירוע</span><input type="text" id="eTitle" value="${esc(d.title)}" placeholder="למשל: אסיפת הורים ד׳2"></label>
+    <span class="small" style="font-weight:700">סוג</span>
+    <div class="seg" id="eType">${Object.entries(EVENT_TYPES).map(([k,v]) => `<button data-t="${k}" class="${d.type===k?'on':''}">${v.ic} ${v.label}</button>`).join('')}</div>
+    <div class="row2"><label class="f"><span>תאריך</span><input type="date" id="eDate" value="${esc(d.date)}"></label><label class="f"><span>עד תאריך (לא חובה)</span><input type="date" id="eEnd" value="${esc(d.end||'')}"></label></div>
+    <div class="row2"><label class="f"><span>שעה (לא חובה)</span><input type="time" id="eTime" value="${esc(d.time||'')}"></label>
+      <label class="f"><span>להזכיר</span><select id="eLead">${[['','לפי ההגדרה ('+S.settings.eventLeadDays+' ימים לפני)'],['0','ביום עצמו'],['1','יום לפני'],['2','יומיים לפני'],['3','3 ימים לפני'],['7','שבוע לפני']].map(([v,l]) => `<option value="${v}" ${String(d.lead??'')===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+    <label class="switch"><span>אין לימודים ביום הזה (התזכורות ידלגו עליו)</span><input type="checkbox" id="eNo" ${d.noSchool?'checked':''}></label>
+    <label class="f"><span>הערה</span><input type="text" id="eNote" value="${esc(d.note||'')}"></label>
+    <div class="modal-actions"><button class="btn primary" id="eSave">שמור</button><button class="btn" id="eIcs">📲 ליומן הטלפון</button>
+      ${!isNew ? `<button class="btn danger" id="eDel">${d.builtin ? (d.hidden ? 'הצג שוב' : 'הסתר') : 'מחק'}</button>` : ''}<button class="btn" id="eNo2">ביטול</button></div>`,
+  m => {
+    $$('#eType button', m).forEach(b => b.onclick = () => { d.type = b.dataset.t; $$('#eType button', m).forEach(x => x.classList.toggle('on', x === b)); });
+    const collect = () => {
+      d.title = $('#eTitle', m).value.trim(); d.date = $('#eDate', m).value; d.end = $('#eEnd', m).value;
+      if(d.end && d.end < d.date) d.end = '';
+      d.time = $('#eTime', m).value; d.lead = $('#eLead', m).value === '' ? null : +$('#eLead', m).value;
+      d.noSchool = $('#eNo', m).checked; d.note = $('#eNote', m).value.trim();
+    };
+    $('#eNo2', m).onclick = () => closeModal();
+    $('#eIcs', m).onclick = () => { collect(); if(!d.title || !d.date){ toast('צריך שם ותאריך', true); return; } shareOrDownload('classnest-event.ics', buildICS([eventToIcs(d)]), 'text/calendar'); };
+    $('#eSave', m).onclick = () => {
+      collect();
+      if(!d.title || !d.date){ toast('צריך שם ותאריך', true); return; }
+      if(d.builtin) d.userEdited = true;
+      if(e) Object.assign(e, d); else S.events.push(d);
+      save(); closeModal(); rerender(); toast('נשמר');
+    };
+    const del = $('#eDel', m);
+    if(del) del.onclick = async () => {
+      if(d.builtin){ e.hidden = !e.hidden; save(); closeModal(); rerender(); toast(e.hidden ? 'הוסתר — אפשר להחזיר מ"מוסתרים"' : 'מוצג שוב'); return; }
+      if(!(await confirmBox('למחוק את האירוע? אפשר לשחזר מסל המחזור בהגדרות.', 'מחק', true))) return;
+      e.deleted = true; S.trash.unshift({kind:'event', id:e.id, at:new Date().toISOString(), label:e.title}); save(); rerender();
+    };
+  });
+}
+/* =====================================================================
+   LESSON card — summary, dictation, recordings, homework
+   ===================================================================== */
+function getLesson(key, create){
+  if(S.lessons[key]) return S.lessons[key];
+  const [date, slotId] = key.split('|'); const sl = slot(slotId);
+  const rec = {key, date, slotId, classId: sl ? sl.classId : '', subjectId: sl ? sl.subjectId : '', summary:'', audio:[], createdAt:new Date().toISOString()};
+  if(create){ S.lessons[key] = rec; }
+  return rec;
+}
+function pruneEmptyLesson(key){
+  const r = S.lessons[key];
+  if(r && !r.summary && !(r.audio||[]).length) delete S.lessons[key];
+}
+RENDER.lesson = ({key}) => {
+  const el = $('#scr-lesson');
+  const [date, slotId] = key.split('|'); const sl = slot(slotId);
+  const rec = getLesson(key, false);
+  const classId = rec.classId || (sl && sl.classId), subjectId = rec.subjectId || (sl && sl.subjectId);
+  const b = sl && bell(sl.period);
+  const title = [sub(subjectId) && sub(subjectId).name, cls(classId) && cls(classId).name].filter(Boolean).join(' · ') || 'שיעור';
+  const toCheck = openTasks().filter(t => (t.dueSlotId === slotId && t.dueDate === date) || (t.classId === classId && t.dueDate && t.dueDate < date && (!subjectId || !t.subjectId || t.subjectId === subjectId)));
+  const given = S.tasks.filter(t => !t.deleted && t.origin && t.origin.date === date && t.origin.slotId === slotId);
+  const prev = classId ? prevLessonRecord(classId, subjectId, key) : null;
+  const prevHw = prev ? S.tasks.filter(t => !t.deleted && t.origin && `${t.origin.date}|${t.origin.slotId}` === prev.key) : [];
+  const aiOn = aiReady();
+  el.innerHTML = `<div class="screen-head"><button class="back" id="lBack" aria-label="חזרה">→ חזרה</button><h1>${esc(title)}</h1></div>
+  <div class="lesson-head"><div class="lesson-kicker">${classDot(classId)}<span>${esc(fmtDate(date))}</span>${b ? `<span class="tag">שיעור ${b.n} · <bdi class="t">${b.start}–${b.end}</bdi></span>` : ''}${sl && sl.room ? `<span>${esc(sl.room)}</span>` : ''}</div></div>
+  ${toCheck.length ? `<h2>לבדוק בשיעור הזה</h2><div class="card">${toCheck.map(t => taskRow(t)).join('')}</div>` : ''}
+  ${prev ? `<h2>בשיעור הקודם</h2><div class="prev"><b>${esc(fmtDate(prev.date))}</b>\n${esc((prev.summary||'').slice(0,600)) || '<i>הוקלט בלי סיכום כתוב</i>'}${prevHw.length ? '\n\nשיעורי בית: ' + prevHw.map(t => esc(t.title)).join(' · ') : ''}</div>` : ''}
+  <h2>סיכום השיעור</h2>
+  <textarea id="lSum" placeholder="מה עשינו היום? נושא, עמודים, מה הספקנו, מי חסר, מה להמשיך…" aria-label="סיכום השיעור">${esc(rec.summary)}</textarea>
+  <div class="btn-row">
+    <button class="btn sm" id="lDict" aria-pressed="false">🎙️ הכתבה</button>
+    ${aiOn ? '<button class="btn sm" id="lTidy">✨ סדר את הסיכום</button>' : ''}
+    <button class="btn sm" id="lShare">📤 שתף</button>
+  </div>
+  <p class="hint" id="lSaved" aria-live="polite">${rec.summary ? 'נשמר אוטומטית' : 'נשמר אוטומטית תוך כדי כתיבה'}</p>
+  <h2>הקלטות</h2>
+  <div class="rec"><button class="btn" id="lRec">🔴 הקלט הערה קולית</button><span id="lRecState"></span></div>
+  <div id="lAudio">${(rec.audio||[]).map((a,i) => `<div class="audio-item" data-aid="${a.id}">
+      <div class="section-row"><b>הקלטה ${i+1}</b><span class="muted small">${esc(new Date(a.at).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}))}${a.dur ? ' · ' + Math.round(a.dur) + ' שנ׳' : ''}</span></div>
+      <audio controls preload="none" data-src="${a.id}"></audio>
+      ${a.transcript ? `<div class="prev" style="color:var(--ink)">${esc(a.transcript)}</div>` : ''}
+      <div class="btn-row"><button class="btn sm" data-tr="${a.id}">📝 ${a.transcript ? 'תמלל שוב' : 'תמלל'}</button>${a.transcript ? `<button class="btn sm" data-addtr="${a.id}">＋ הוסף לסיכום</button>` : ''}<button class="btn sm danger" data-adel="${a.id}">🗑️</button></div>
+    </div>`).join('') || '<p class="muted small">אין הקלטות. ההקלטות נשמרות רק על המכשיר.</p>'}</div>
+  ${!aiOn ? '<p class="hint">תמלול של הקלטה שמורה דורש חיבור בינה (Gemini חינם) בהגדרות. ההכתבה החיה למעלה עובדת בלי חיבור.</p>' : ''}
+  <div class="section-row"><h2>שיעורי בית ותזכורות מהשיעור</h2></div>
+  ${given.length ? `<div class="card">${given.map(t => taskRow(t)).join('')}</div>` : '<p class="muted small">עוד לא נתת שיעורי בית בשיעור הזה.</p>'}
+  <div class="btn-row"><button class="btn primary" id="lHw">📚 נתתי שיעורי בית</button><button class="btn" id="lTask">📌 תזכורת לשיעור הבא</button></div>`;
+
+  $('#lBack').onclick = () => history.length > 1 ? history.back() : go('home');
+  const ta = $('#lSum'); let tmr = null;
+  ta.oninput = () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(() => { const r = getLesson(key, true); r.summary = ta.value; r.classId = classId; r.subjectId = subjectId; r.updatedAt = new Date().toISOString(); pruneEmptyLesson(key); save(); $('#lSaved').textContent = 'נשמר ✓'; }, 400);
+  };
+  $('#lDict').onclick = () => toggleDictation(ta, $('#lDict'));
+  const tidy = $('#lTidy'); if(tidy) tidy.onclick = () => tidySummary(ta, title);
+  $('#lShare').onclick = async () => {
+    const txt = `${title} · ${fmtDate(date)}\n\n${ta.value}${given.length ? '\n\nשיעורי בית: ' + given.map(t => t.title).join('; ') : ''}\n\n— ${S.settings.userName || 'ClassNest'}`;
+    try{ if(navigator.share){ await navigator.share({title, text: txt}); return; } }catch(e){ if(e.name === 'AbortError') return; }
+    try{ await navigator.clipboard.writeText(txt); toast('הועתק ללוח'); }catch(e){ toast('לא הצלחתי לשתף', true); }
+  };
+  $('#lRec').onclick = () => toggleRecording(key, classId, subjectId);
+  $$('audio[data-src]').forEach(async au => {
+    au.addEventListener('play', async () => {
+      if(au.src) return;
+      const blob = await Store.get('media', au.dataset.src);
+      if(!blob){ toast('ההקלטה לא נמצאה במכשיר', true); return; }
+      au.src = URL.createObjectURL(blob); au.play();
+    }, {once:true});
+  });
+  $$('[data-tr]').forEach(bt => bt.onclick = () => transcribeRecording(key, bt.dataset.tr, bt));
+  $$('[data-addtr]').forEach(bt => bt.onclick = () => {
+    const a = S.lessons[key].audio.find(x => x.id === bt.dataset.addtr);
+    ta.value = (ta.value ? ta.value.trimEnd() + '\n\n' : '') + a.transcript; ta.oninput(); toast('נוסף לסיכום');
+  });
+  $$('[data-adel]').forEach(bt => bt.onclick = async () => {
+    if(!(await confirmBox('למחוק את ההקלטה לצמיתות?', 'מחק', true))) return;
+    const r = S.lessons[key]; r.audio = r.audio.filter(x => x.id !== bt.dataset.adel);
+    try{ await Store.del('media', bt.dataset.adel); }catch(e){}
+    pruneEmptyLesson(key); save(); RENDER.lesson({key});
+  });
+  $('#lHw').onclick = () => editTask(null, {origin:{date, slotId}, kind:'hw'});
+  $('#lTask').onclick = () => editTask(null, {origin:{date, slotId}, kind:'task'});
+  bindTaskRows(el);
+};
+
+/* ---------- live dictation (Web Speech — free, works best in Chrome/Android) ---------- */
+let recog = null;
+function toggleDictation(ta, btn){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ toast('הכתבה חיה לא נתמכת בדפדפן הזה (באייפון מוגבל). אפשר להקליט ולתמלל.', true); return; }
+  if(recog){ recog.stop(); return; }
+  recog = new SR(); recog.lang = 'he-IL'; recog.continuous = true; recog.interimResults = true;
+  const base = ta.value ? ta.value.trimEnd() + ' ' : '';
+  let finalTxt = '';
+  recog.onresult = e => {
+    let interim = '';
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const r = e.results[i];
+      if(r.isFinal) finalTxt += r[0].transcript + ' '; else interim += r[0].transcript;
+    }
+    ta.value = base + finalTxt + interim;
+  };
+  recog.onerror = e => { if(e.error === 'not-allowed') toast('אין הרשאת מיקרופון. אפשר לאשר בהגדרות הדפדפן.', true); else if(e.error !== 'no-speech' && e.error !== 'aborted') toast('ההכתבה נעצרה: ' + e.error, true); };
+  recog.onend = () => { recog = null; btn.textContent = '🎙️ הכתבה'; btn.setAttribute('aria-pressed','false'); ta.value = base + finalTxt; ta.oninput && ta.oninput(); };
+  try{ recog.start(); btn.textContent = '⏹️ עצור הכתבה'; btn.setAttribute('aria-pressed','true'); }catch(e){ recog = null; toast('לא הצלחתי להפעיל הכתבה', true); }
+}
+
+/* ---------- audio recording (MediaRecorder → Blob in IndexedDB) ---------- */
+let recState = null;
+function pickMime(){
+  if(!window.MediaRecorder) return null;
+  for(const m of ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']) if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+async function toggleRecording(key, classId, subjectId){
+  if(recState){ recState.rec.stop(); return; }
+  const mime = pickMime();
+  if(mime === null){ toast('הקלטה לא נתמכת בדפדפן הזה', true); return; }
+  if(!isSecureContext){ toast('הקלטה עובדת רק באתר מאובטח (https) — לא מקובץ מקומי', true); return; }
+  let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch(e){
+    const msg = e.name === 'NotAllowedError' ? 'אין הרשאת מיקרופון — אפשר לאשר בהגדרות הדפדפן' : e.name === 'NotFoundError' ? 'לא נמצא מיקרופון' : e.name === 'NotReadableError' ? 'המיקרופון תפוס באפליקציה אחרת' : 'לא הצלחתי לפתוח מיקרופון';
+    toast(msg, true); return;
+  }
+  const rec = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
+  const chunks = [], t0 = Date.now();
+  rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+  rec.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    clearInterval(recState && recState.timer); recState = null;
+    const blob = new Blob(chunks, {type: rec.mimeType || mime || 'audio/webm'});
+    if(!blob.size){ toast('ההקלטה ריקה', true); rerenderLessonIf(key); return; }
+    const id = 'a_' + uid();
+    try{
+      await Store.set('media', id, blob);
+      const r = getLesson(key, true); r.classId = r.classId || classId; r.subjectId = r.subjectId || subjectId;
+      r.audio = r.audio || []; r.audio.push({id, at:new Date().toISOString(), dur:(Date.now()-t0)/1000, type: blob.type});
+      save(); toast('ההקלטה נשמרה');
+    }catch(e){ logErr('rec save: ' + e.message); toast('שמירת ההקלטה נכשלה (אין מקום?)', true); }
+    rerenderLessonIf(key);
+  };
+  rec.start(1000);
+  const btn = $('#lRec'), st = $('#lRecState');
+  btn.textContent = '⏹️ עצור ושמור';
+  recState = {rec, key, timer: setInterval(() => { const s = Math.round((Date.now()-t0)/1000); st.innerHTML = `<span class="rec-live">מקליט ${Math.floor(s/60)}:${pad(s%60)}</span>`; if(s >= 3600) rec.stop(); }, 500)};
+}
+function rerenderLessonIf(key){ if(current === 'lesson' && params.key === key) RENDER.lesson({key}); }
+function stopAllRecording(){ try{ if(recState) recState.rec.stop(); if(recog) recog.stop(); }catch(e){} }
+/* =====================================================================
+   AI — BYOK (Free works fully without it). Golden rule: never a single hard-coded model.
+   ===================================================================== */
+const AI_PROVIDERS = {
+  gemini:{name:'Gemini (Google)', tag:'FREE', models:['gemini-flash-latest','gemini-2.5-flash','gemini-flash-lite-latest','gemini-2.0-flash'], audio:true,
+    help:`<ol class="small"><li>היכנס ל-<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> עם חשבון גוגל.</li><li>לחץ "Create API key" והעתק את המפתח.</li><li>הדבק כאן ולחץ "שמור ובדוק". יש שכבה חינמית בלי כרטיס אשראי.</li></ol><p class="small"><a href="https://www.youtube.com/results?search_query=how+to+get+gemini+api+key+ai+studio" target="_blank" rel="noopener">סרטון הדרכה ביוטיוב</a></p>`},
+  claude:{name:'Claude (Anthropic)', tag:'API', models:['claude-haiku-4-5','claude-sonnet-4-5'], audio:false,
+    help:`<ol class="small"><li>היכנס ל-<a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>.</li><li>API Keys → Create Key. (בתשלום לפי שימוש)</li><li>הדבק כאן. שים לב: Claude לא מתמלל אודיו — התמלול דורש Gemini או OpenAI.</li></ol>`},
+  openai:{name:'ChatGPT (OpenAI)', tag:'API', models:['gpt-4o-mini','gpt-4o'], audio:true,
+    help:`<ol class="small"><li>היכנס ל-<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>.</li><li>Create new secret key. (בתשלום לפי שימוש)</li><li>הדבק כאן. תמלול עד 25MB לקובץ.</li></ol>`}
+};
+function aiReady(){ const p = S.settings.ai.provider; return !!Vault.get(p); }
+function updateAiLed(){ const l = $('#aiLed'); if(l){ l.classList.toggle('on', aiReady() && S.settings.ai.connected); l.title = aiReady() ? 'בינה מחוברת' : 'בינה לא מחוברת'; } }
+function modelChain(){
+  const p = S.settings.ai.provider, prefs = S.settings.ai.model ? [S.settings.ai.model] : [];
+  return [...new Set([...prefs, ...AI_PROVIDERS[p].models])];
+}
+const safeFetch = (...a) => window.fetch(...a);
+async function aiText(prompt, system){
+  const p = S.settings.ai.provider, key = Vault.get(p);
+  if(!key) throw new Error('אין מפתח בינה — אפשר לחבר בהגדרות');
+  let lastErr = null;
+  for(const model of modelChain()){
+    try{
+      let r, j;
+      if(p === 'gemini'){
+        r = await safeFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({systemInstruction: system ? {parts:[{text:system}]} : undefined, contents:[{role:'user', parts:[{text:prompt}]}]})});
+        if(r.status === 404){ lastErr = new Error('model 404: ' + model); continue; }
+        j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+        return (j.candidates && j.candidates[0] && j.candidates[0].content.parts.map(x => x.text || '').join('')) || '';
+      }
+      if(p === 'claude'){
+        r = await safeFetch('https://api.anthropic.com/v1/messages', {method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body: JSON.stringify({model, max_tokens:1500, system: system || undefined, messages:[{role:'user', content:prompt}]})});
+        if(r.status === 404){ lastErr = new Error('model 404: ' + model); continue; }
+        j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+        return j.content.map(x => x.text || '').join('');
+      }
+      if(p === 'openai'){
+        r = await safeFetch('https://api.openai.com/v1/chat/completions', {method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + key},
+          body: JSON.stringify({model, messages:[...(system ? [{role:'system', content:system}] : []), {role:'user', content:prompt}]})});
+        if(r.status === 404){ lastErr = new Error('model 404: ' + model); continue; }
+        j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+        return j.choices[0].message.content || '';
+      }
+    }catch(e){ lastErr = e; if(!/404/.test(e.message)) break; }
+  }
+  throw lastErr || new Error('הבינה לא זמינה');
+}
+function blobToB64(blob){ return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); }); }
+async function aiTranscribe(blob){
+  const p = S.settings.ai.provider, key = Vault.get(p);
+  if(!key) throw new Error('צריך לחבר Gemini או OpenAI בהגדרות כדי לתמלל');
+  if(p === 'claude') throw new Error('Claude לא מתמלל אודיו. אפשר לבחור Gemini (חינם) או OpenAI בהגדרות.');
+  if(p === 'openai'){
+    if(blob.size > 25*1024*1024) throw new Error('ההקלטה גדולה מ-25MB — המגבלה של OpenAI');
+    const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+    let lastErr;
+    for(const model of ['gpt-4o-mini-transcribe','whisper-1']){
+      const fd = new FormData(); fd.append('file', blob, 'rec.' + ext); fd.append('model', model); fd.append('language','he');
+      const r = await safeFetch('https://api.openai.com/v1/audio/transcriptions', {method:'POST', headers:{Authorization:'Bearer ' + key}, body: fd});
+      const j = await r.json().catch(() => ({}));
+      if(r.ok) return j.text || '';
+      lastErr = new Error(j.error && j.error.message || r.status);
+      if(r.status !== 404 && r.status !== 400) break;
+    }
+    throw lastErr;
+  }
+  if(blob.size > 18*1024*1024) throw new Error('ההקלטה ארוכה מדי לתמלול ישיר (מעל ~18MB). כדאי להקליט בחלקים.');
+  const b64 = await blobToB64(blob);
+  let lastErr;
+  for(const model of modelChain()){
+    const r = await safeFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({contents:[{role:'user', parts:[
+        {inline_data:{mime_type:(blob.type || 'audio/webm').split(';')[0], data:b64}},
+        {text:'תמלל את ההקלטה בעברית, מילה במילה, עם פיסוק. החזר רק את הטקסט המתומלל, בלי הקדמות.'}]}]})});
+    const j = await r.json().catch(() => ({}));
+    if(r.ok) return (j.candidates && j.candidates[0] && j.candidates[0].content.parts.map(x => x.text||'').join('')) || '';
+    lastErr = new Error(j.error && j.error.message || r.status);
+    if(r.status !== 404) break;
+  }
+  throw lastErr;
+}
+async function transcribeRecording(key, aid, btn){
+  const a = (S.lessons[key].audio || []).find(x => x.id === aid);
+  const blob = await Store.get('media', aid);
+  if(!blob){ toast('ההקלטה לא נמצאה', true); return; }
+  btn.disabled = true; btn.textContent = '⏳ מתמלל…';
+  try{
+    a.transcript = (await aiTranscribe(blob)).trim(); save(); toast('התמלול מוכן'); S.settings.ai.connected = true; updateAiLed();
+  }catch(e){ logErr('transcribe: ' + e.message); toast('התמלול נכשל: ' + e.message, true); }
+  rerenderLessonIf(key);
+}
+async function tidySummary(ta, title){
+  if(!ta.value.trim()){ toast('אין עדיין מה לסדר', true); return; }
+  const btn = $('#lTidy'); btn.disabled = true; btn.textContent = '⏳ מסדר…';
+  try{
+    const out = await aiText(`סיכום גולמי של שיעור "${title}":\n\n${ta.value}`,
+      'אתה עוזר למורה ביסודי. סדר את הסיכום לשורות קצרות וברורות בעברית: נושא, מה נלמד, מה הספקנו, הערות על תלמידים/כיתה, מה להמשיך בשיעור הבא. שמור על כל העובדות, אל תמציא שום דבר שלא נכתב, ואל תוסיף הקדמה.');
+    openModal(`<h2>✨ הצעת סידור</h2><div class="prev" style="color:var(--ink)">${esc(out)}</div>
+      <div class="modal-actions"><button class="btn primary" id="tdRep">החלף את הסיכום</button><button class="btn" id="tdAdd">הוסף מתחת</button><button class="btn" id="tdNo">ביטול</button></div>`, m => {
+      $('#tdRep', m).onclick = () => { ta.value = out.trim(); ta.oninput(); closeModal(); };
+      $('#tdAdd', m).onclick = () => { ta.value = ta.value.trimEnd() + '\n\n' + out.trim(); ta.oninput(); closeModal(); };
+      $('#tdNo', m).onclick = () => closeModal();
+    });
+    S.settings.ai.connected = true; updateAiLed();
+  }catch(e){ toast('הבינה לא הגיבה: ' + e.message, true); }
+  btn.disabled = false; btn.textContent = '✨ סדר את הסיכום';
+}
+async function fetchLiveModels(){
+  const p = S.settings.ai.provider, key = Vault.get(p);
+  if(!key) throw new Error('אין מפתח');
+  if(p === 'gemini'){
+    const r = await safeFetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`);
+    const j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+    return (j.models||[]).filter(m => (m.supportedGenerationMethods||[]).includes('generateContent') && /gemini/.test(m.name)).map(m => m.name.replace('models/',''));
+  }
+  if(p === 'claude'){
+    const r = await safeFetch('https://api.anthropic.com/v1/models?limit=100', {headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}});
+    const j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+    return (j.data||[]).map(m => m.id);
+  }
+  const r = await safeFetch('https://api.openai.com/v1/models', {headers:{Authorization:'Bearer ' + key}});
+  const j = await r.json(); if(!r.ok) throw new Error(j.error && j.error.message || r.status);
+  return (j.data||[]).map(m => m.id).filter(id => /^gpt-|^o\d/.test(id)).sort();
+}
+/* =====================================================================
+   JOURNAL — all lesson summaries by class/subject
+   ===================================================================== */
+let jf = {classId:'', subjectId:'', q:''};
+RENDER.journal = () => {
+  const el = $('#scr-journal');
+  let list = Object.values(S.lessons).filter(l => l.summary || (l.audio||[]).length);
+  if(jf.classId) list = list.filter(l => l.classId === jf.classId);
+  if(jf.subjectId) list = list.filter(l => l.subjectId === jf.subjectId);
+  if(jf.q) list = list.filter(l => (l.summary + ' ' + (l.audio||[]).map(a => a.transcript||'').join(' ')).includes(jf.q));
+  list.sort((a,b) => a.key < b.key ? 1 : -1);
+  el.innerHTML = head('יומן שיעורים') + `
+    <div class="row2"><label class="f"><span>כיתה</span><select id="jC">${optionList(S.classes, jf.classId, 'כל הכיתות')}</select></label>
+    <label class="f"><span>מקצוע</span><select id="jS">${optionList(S.subjects, jf.subjectId, 'כל המקצועות')}</select></label></div>
+    <label class="f"><span>חיפוש בסיכומים</span><input type="search" id="jQ" value="${esc(jf.q)}" placeholder="למשל: שברים"></label>
+    ${list.length ? `<div class="card">${list.map(l => {
+      const sl = slot(l.slotId);
+      return `<div class="item" data-open="${esc(l.key)}"><div class="item-main"><div class="item-title">${classDot(l.classId)} ${esc([sub(l.subjectId)&&sub(l.subjectId).name, cls(l.classId)&&cls(l.classId).name].filter(Boolean).join(' · ') || 'שיעור')}</div>
+        <div class="item-meta"><span>${esc(fmtDate(l.date))}</span>${sl?`<span class="tag">שיעור ${sl.period}</span>`:''}${(l.audio||[]).length?`<span class="tag info">🎙️ ${l.audio.length}</span>`:''}</div>
+        <div class="hint" style="white-space:pre-wrap">${esc((l.summary||'').slice(0,160))}${(l.summary||'').length>160?'…':''}</div></div></div>`;
+    }).join('')}</div>` : `<div class="empty">עוד אין סיכומים${jf.classId||jf.subjectId||jf.q?' שמתאימים לסינון':''}. פותחים שיעור מדף הבית וכותבים או מקליטים.</div>`}
+    <div class="btn-row"><button class="btn" id="jPrint">🖨️ דוח שבועי (PDF)</button><button class="btn" id="jCsv">⬇️ ייצוא CSV</button></div>`;
+  $('#jC').onchange = e => { jf.classId = e.target.value; RENDER.journal(); };
+  $('#jS').onchange = e => { jf.subjectId = e.target.value; RENDER.journal(); };
+  $('#jQ').onchange = e => { jf.q = e.target.value.trim(); RENDER.journal(); };
+  $$('[data-open]', el).forEach(i => i.onclick = () => go('lesson', {key: i.dataset.open}));
+  $('#jPrint').onclick = printWeekly;
+  $('#jCsv').onclick = exportLessonsCsv;
+};
+function printWeekly(){
+  const to = todayStr(), from = addDays(to, -6);
+  const ls = Object.values(S.lessons).filter(l => l.date >= from && l.date <= to && (l.summary || (l.audio||[]).length)).sort((a,b) => a.key < b.key ? -1 : 1);
+  const given = S.tasks.filter(t => !t.deleted && t.origin && t.origin.date >= from && t.origin.date <= to);
+  const open = openTasks();
+  let h = `<h1 style="font-family:serif">דוח שבועי — ${esc(fmtDate(from,false))} עד ${esc(fmtDate(to,false))}</h1>
+  <p>${esc(S.settings.userName||'')}${S.settings.school?' · '+esc(S.settings.school):''} · הופק ${esc(new Date().toLocaleString('he-IL'))}</p>
+  <p><b>סיכום:</b> ${ls.length} שיעורים מתועדים · ${given.length} שיעורי בית/תזכורות שניתנו · ${open.length} משימות פתוחות</p><h2>שיעורים</h2>`;
+  h += ls.map(l => `<div style="border-bottom:1px solid #ccc;padding:6px 0"><b>${esc(fmtDate(l.date))} · ${esc([sub(l.subjectId)&&sub(l.subjectId).name, cls(l.classId)&&cls(l.classId).name].filter(Boolean).join(' · '))}</b><div style="white-space:pre-wrap">${esc(l.summary||'')}</div></div>`).join('') || '<p>אין סיכומים השבוע.</p>';
+  h += `<h2>משימות פתוחות</h2><ul>${open.map(t => `<li>${esc(t.title)} — ${esc(cls(t.classId)?cls(t.classId).name:'כללי')} · ${esc(describeDue(t))}</li>`).join('') || '<li>אין</li>'}</ul><p style="font-size:12px">ClassNest · AppNest</p>`;
+  doPrint(h);
+}
+
+/* ---------- CSV / backup / restore ---------- */
+function csv(rows){ return '\uFEFF' + rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n'); }
+function exportTasksCsv(){
+  const rows = [['שם המורה', S.settings.userName, 'הופק', new Date().toLocaleString('he-IL')], ['סוג','כותרת','כיתה','מקצוע','תאריך תזכורת','שעה','בוצע','הערות']];
+  S.tasks.filter(t => !t.deleted).forEach(t => rows.push([t.kind==='hw'?'שיעורי בית':'משימה', t.title, cls(t.classId)&&cls(t.classId).name, sub(t.subjectId)&&sub(t.subjectId).name, t.dueDate, t.dueTime, t.done?'כן':'לא', t.notes]));
+  rows.push([], ['סה"כ', S.tasks.filter(t => !t.deleted).length, 'פתוחות', openTasks().length]);
+  shareOrDownload(`classnest-tasks-${todayStr()}.csv`, csv(rows), 'text/csv');
+}
+function exportLessonsCsv(){
+  const rows = [['שם המורה', S.settings.userName, 'הופק', new Date().toLocaleString('he-IL')], ['תאריך','שיעור','כיתה','מקצוע','סיכום','תמלולים']];
+  Object.values(S.lessons).sort((a,b) => a.key < b.key ? -1 : 1).forEach(l => rows.push([l.date, slot(l.slotId)?slot(l.slotId).period:'', cls(l.classId)&&cls(l.classId).name, sub(l.subjectId)&&sub(l.subjectId).name, l.summary, (l.audio||[]).map(a => a.transcript||'').filter(Boolean).join(' | ')]));
+  rows.push([], ['סה"כ שיעורים מתועדים', Object.keys(S.lessons).length]);
+  shareOrDownload(`classnest-lessons-${todayStr()}.csv`, csv(rows), 'text/csv');
+}
+async function backup(withAudio){
+  const st = JSON.parse(JSON.stringify(S));
+  delete st.settings.pinHash; delete st.settings.pinSalt; // PIN is per-device
+  const out = {app:APP_NAME, version:APP_VERSION, exportedAt:new Date().toISOString(), user:S.settings.userName, secretsIncluded:false, state:st, media:{}};
+  if(withAudio){
+    for(const l of Object.values(S.lessons)) for(const a of (l.audio||[])){
+      const b = await Store.get('media', a.id);
+      if(b) out.media[a.id] = {type:b.type, b64: await blobToB64(b)};
+    }
+  }
+  S.settings.lastBackup = new Date().toISOString(); save();
+  shareOrDownload(`classnest-backup-${todayStr()}${withAudio?'-full':''}.json`, JSON.stringify(out), 'application/json');
+  toast('קובץ הגיבוי נוצר (בלי מפתחות בינה)');
+}
+async function restore(file){
+  let data;
+  try{ data = JSON.parse(await file.text()); }catch(e){ toast('הקובץ לא נקרא — זה לא גיבוי של ClassNest', true); return; }
+  if(!data || data.app !== APP_NAME || !data.state){ toast('זה לא קובץ גיבוי של ClassNest', true); return; }
+  const n = Object.keys(data.state.lessons||{}).length, t = (data.state.tasks||[]).length;
+  if(!(await confirmBox(`לשחזר גיבוי מ-${new Date(data.exportedAt).toLocaleDateString('he-IL')} (${n} שיעורים, ${t} משימות)? כל הנתונים הנוכחיים יוחלפו.`, 'שחזר', true))) return;
+  const keepPin = {h:S.settings.pinHash, s:S.settings.pinSalt};
+  try{
+    for(const [id, m] of Object.entries(data.media||{})){
+      const bin = Uint8Array.from(atob(m.b64), c => c.charCodeAt(0));
+      await Store.set('media', id, new Blob([bin], {type:m.type}));
+    }
+    const base = freshState();
+    S = Object.assign(base, data.state); S.settings = Object.assign(freshState().settings, data.state.settings||{});
+    S.settings.pinHash = keepPin.h; S.settings.pinSalt = keepPin.s;
+    await save(true);
+    applyTheme(); toast('השחזור הושלם'); go('home');
+  }catch(e){ logErr('restore: ' + e.message); toast('השחזור נכשל: ' + e.message, true); }
+}
+
+/* ---------- PIN lock ---------- */
+async function sha(s){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,'0')).join(''); }
+function showLock(){
+  return new Promise(res => {
+    if(!S.settings.pinHash){ res(); return; }
+    if($('.lock')) return;
+    const d = document.createElement('div');
+    d.className = 'lock';
+    d.innerHTML = `<div class="brand-mark" style="width:56px;height:56px;font-size:28px">📘</div><h1>ClassNest</h1><p class="muted">הזן קוד כדי לפתוח</p>
+      <input type="password" inputmode="numeric" class="pin-in" id="pinIn" maxlength="8" autocomplete="off" aria-label="קוד נעילה"><button class="btn primary" id="pinGo">פתח</button><p class="hint" id="pinMsg" aria-live="assertive"></p>`;
+    document.body.appendChild(d);
+    const inp = $('#pinIn', d); setTimeout(() => inp.focus(), 50);
+    const tryIt = async () => {
+      if(await sha(S.settings.pinSalt + inp.value) === S.settings.pinHash){ d.remove(); res(); }
+      else { $('#pinMsg', d).textContent = 'קוד שגוי'; inp.value = ''; hapt(80); }
+    };
+    $('#pinGo', d).onclick = tryIt;
+    inp.onkeydown = e => { if(e.key === 'Enter') tryIt(); };
+  });
+}
+function setPin(){
+  openModal(`<h2>${S.settings.pinHash?'שינוי':'הגדרת'} קוד נעילה</h2><p class="muted small">הקוד נשמר מוצפן (hash) על המכשיר. אם שוכחים אותו אין דרך לשחזר — רק איפוס מלא. כדאי לגבות קודם.</p>
+    <label class="f"><span>קוד חדש (4–8 ספרות)</span><input type="password" inputmode="numeric" id="p1" maxlength="8"></label>
+    <label class="f"><span>שוב</span><input type="password" inputmode="numeric" id="p2" maxlength="8"></label>
+    <div class="modal-actions"><button class="btn primary" id="pOk">שמור</button>${S.settings.pinHash?'<button class="btn danger" id="pOff">בטל נעילה</button>':''}<button class="btn" id="pNo">ביטול</button></div>`, m => {
+    $('#pNo', m).onclick = () => closeModal();
+    $('#pOk', m).onclick = async () => {
+      const a = $('#p1', m).value, b = $('#p2', m).value;
+      if(!/^\d{4,8}$/.test(a)){ toast('הקוד צריך להיות 4–8 ספרות', true); return; }
+      if(a !== b){ toast('הקודים לא זהים', true); return; }
+      S.settings.pinSalt = uid(); S.settings.pinHash = await sha(S.settings.pinSalt + a); save(); closeModal(); rerender(); toast('הנעילה הופעלה');
+    };
+    const off = $('#pOff', m);
+    if(off) off.onclick = () => { S.settings.pinHash = null; S.settings.pinSalt = null; save(); closeModal(); rerender(); toast('הנעילה בוטלה'); };
+  });
+}
+
+/* =====================================================================
+   SETTINGS
+   ===================================================================== */
+RENDER.settings = async () => {
+  const el = $('#scr-settings'), st = S.settings, p = st.ai.provider, P = AI_PROVIDERS[p];
+  const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted().catch(() => false) : false;
+  const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate().catch(() => null) : null;
+  const trash = S.trash.filter(x => (x.kind==='task' ? S.tasks : S.events).some(o => o.id === x.id && o.deleted));
+  const daysSinceBackup = st.lastBackup ? dayDiff(st.lastBackup.slice(0,10), todayStr()) : null;
+  el.innerHTML = head('הגדרות') + `
+  <h2>תזכורות</h2>
+  <label class="switch"><span>התראות מערכת<br><span class="hint">עובדות כשהאפליקציה פתוחה או ברקע. כשהיא סגורה לגמרי אין התראה (מגבלה של אפליקציית רשת בלי שרת) — לזה יש "📲 ליומן הטלפון" בכל תזכורת.</span></span><input type="checkbox" id="stNotify" ${st.notify?'checked':''}></label>
+  <label class="f"><span>ברירת מחדל לשיעורי בית</span><select id="stHw"><option value="next" ${st.defaultHwMode==='next'?'selected':''}>להזכיר בשיעור הבא של הכיתה</option><option value="date" ${st.defaultHwMode==='date'?'selected':''}>לבחור תאריך בכל פעם</option></select></label>
+  <label class="f"><span>להזכיר על אירועים</span><select id="stLead">${[0,1,2,3,7].map(n => `<option value="${n}" ${st.eventLeadDays===n?'selected':''}>${n===0?'ביום עצמו':n===1?'יום לפני':n===7?'שבוע לפני':n+' ימים לפני'}</option>`).join('')}</select></label>
+
+  <h2>בינה (לא חובה) <span class="ai-led ${aiReady()&&st.ai.connected?'on':''}" aria-hidden="true"></span></h2>
+  <p class="small muted">האפליקציה עובדת במלואה בלי בינה. חיבור מוסיף תמלול של הקלטות וסידור סיכומים. כשמשתמשים בזה, ההקלטה/הטקסט נשלחים ישירות לספק שבחרת — לא לשרת של AppNest.</p>
+  <div class="seg" id="aiProv">${Object.entries(AI_PROVIDERS).map(([k,v]) => `<button data-p="${k}" class="${k===p?'on':''}">${v.name} <span class="tag">${v.tag}</span></button>`).join('')}</div>
+  <div class="card">${P.help}
+    <label class="f"><span>מפתח API</span><input type="password" id="aiKey" autocomplete="off" placeholder="${Vault.get(p)?'•••••••• (שמור ומוצפן)':'הדבק כאן את המפתח'}"></label>
+    <div class="btn-row"><button class="btn primary sm" id="aiSave">שמור ובדוק</button>${Vault.get(p)?'<button class="btn sm" id="aiTest">בדוק חיבור</button><button class="btn sm danger" id="aiOff">נתק</button>':''}</div>
+    ${Vault.get(p) ? `<label class="f"><span>מודל</span><select id="aiModel"><option value="">אוטומטי (העדכני ביותר)</option>${[...new Set([st.ai.model, ...(st.ai.liveModels||[]), ...P.models].filter(Boolean))].map(m => `<option ${m===st.ai.model?'selected':''}>${esc(m)}</option>`).join('')}</select></label><button class="btn sm" id="aiRefresh">🔄 רענן מודלים</button>` : ''}
+    <p class="hint">המפתח מוצפן ונשמר מקומית במכשיר ואינו נכלל בגיבויים.</p></div>
+
+  <h2>נעילה ופרטיות</h2>
+  <div class="btn-row"><button class="btn" id="stPin">🔒 ${st.pinHash?'שנה / בטל קוד נעילה':'הגדר קוד נעילה'}</button></div>
+  <p class="hint">מומלץ, כי יש כאן מידע על תלמידים. הכול נשמר רק על המכשיר הזה.</p>
+
+  <h2>גיבוי ושחזור</h2>
+  ${daysSinceBackup === null || daysSinceBackup > 14 ? `<div class="banner info">💾 ${daysSinceBackup===null?'עוד לא גיבית.':'הגיבוי האחרון לפני '+daysSinceBackup+' ימים.'} מומלץ לגבות מדי פעם ולשמור את הקובץ בדרייב או במייל.</div>` : `<p class="hint">גיבוי אחרון: ${esc(new Date(st.lastBackup).toLocaleDateString('he-IL'))}</p>`}
+  <label class="switch"><span>לכלול הקלטות בגיבוי (קובץ גדול יותר)</span><input type="checkbox" id="bkAudio"></label>
+  <div class="btn-row"><button class="btn primary" id="bkGo">💾 גבה עכשיו</button><button class="btn" id="bkRestore">📂 שחזר מגיבוי</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div>
+  <div class="btn-row"><button class="btn sm" id="csvT">⬇️ משימות CSV</button><button class="btn sm" id="csvL">⬇️ שיעורים CSV</button><button class="btn sm" id="repW">🖨️ דוח שבועי</button></div>
+
+  <h2>סל מחזור</h2>
+  ${trash.length ? `<div class="card">${trash.map(x => `<div class="item"><div class="item-main"><div class="item-title">${x.kind==='task'?'📌':'📅'} ${esc(x.label)}</div><div class="item-meta">נמחק ${esc(new Date(x.at).toLocaleDateString('he-IL'))}</div></div><button class="btn sm" data-restore="${x.id}">שחזר</button><button class="btn sm danger" data-purge="${x.id}">מחק לצמיתות</button></div>`).join('')}</div>` : '<p class="muted small">ריק.</p>'}
+
+  <h2>אחסון</h2>
+  <dl class="kv"><dt>מקום שמירה</dt><dd>${Store.mode==='idb'?'IndexedDB (במכשיר)':Store.mode==='local'?'localStorage (מוגבל, בלי הקלטות)':'זיכרון זמני — הנתונים לא יישמרו!'}</dd>
+  <dt>אחסון מתמשך</dt><dd>${persisted?'✅ אושר (הדפדפן לא ימחק)':'⚠️ לא אושר'}</dd>
+  ${est?`<dt>בשימוש</dt><dd>${(est.usage/1048576).toFixed(1)}MB</dd>`:''}</dl>
+  ${!persisted?'<div class="btn-row"><button class="btn sm" id="stPersist">בקש אחסון מתמשך</button></div>':''}
+
+  <h2>עוד</h2>
+  <div class="btn-row"><button class="btn" data-go="setup">🏫 בית הספר</button><button class="btn" id="stGuide">📖 מדריך</button><button class="btn" id="stDiag">🩺 דוח אבחון</button><button class="btn" data-go="about">ℹ️ אודות</button></div>
+  <h2>אזור מסוכן</h2>
+  <button class="btn danger" id="stWipe">🗑️ מחק את כל הנתונים</button>
+  <p class="badge-foot">ClassNest ${APP_VERSION} · <b>AppNest</b></p>`;
+
+  $('#stNotify').onchange = async e => {
+    if(e.target.checked){
+      if(!('Notification' in window)){ toast('הדפדפן לא תומך בהתראות', true); e.target.checked = false; return; }
+      const perm = await Notification.requestPermission();
+      if(perm !== 'granted'){ toast('ההרשאה לא ניתנה — אפשר לשנות בהגדרות הדפדפן', true); e.target.checked = false; return; }
+      st.notify = true; save(); sysNotify('ClassNest', 'התראות פעילות ✓', 'test');
+    }else{ st.notify = false; save(); }
+  };
+  $('#stHw').onchange = e => { st.defaultHwMode = e.target.value; save(); };
+  $('#stLead').onchange = e => { st.eventLeadDays = +e.target.value; save(); refreshAlertDot(); };
+  $$('#aiProv button').forEach(b => b.onclick = () => { st.ai.provider = b.dataset.p; st.ai.model = ''; st.ai.liveModels = []; st.ai.connected = false; save(); RENDER.settings(); updateAiLed(); });
+  $('#aiSave').onclick = async () => {
+    const v = cleanKey($('#aiKey').value);
+    if(!v){ toast('הדבק מפתח', true); return; }
+    try{ await Vault.put(p, v); }catch(e){ toast('שמירת המפתח נכשלה: ' + e.message, true); return; }
+    await testAi();
+  };
+  const t = $('#aiTest'); if(t) t.onclick = testAi;
+  const off = $('#aiOff'); if(off) off.onclick = async () => { await Vault.put(p, ''); st.ai.connected = false; save(); RENDER.settings(); updateAiLed(); toast('נותק'); };
+  const ms = $('#aiModel'); if(ms) ms.onchange = e => { st.ai.model = e.target.value; save(); };
+  const rf = $('#aiRefresh'); if(rf) rf.onclick = async () => { rf.disabled = true; try{ st.ai.liveModels = await fetchLiveModels(); save(); toast(`נמצאו ${st.ai.liveModels.length} מודלים`); RENDER.settings(); }catch(e){ toast('לא הצלחתי למשוך מודלים: ' + e.message, true); rf.disabled = false; } };
+  $('#stPin').onclick = setPin;
+  $('#bkGo').onclick = () => backup($('#bkAudio').checked);
+  $('#bkRestore').onclick = () => $('#bkFile').click();
+  $('#bkFile').onchange = e => { if(e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; };
+  $('#csvT').onclick = exportTasksCsv; $('#csvL').onclick = exportLessonsCsv; $('#repW').onclick = printWeekly;
+  $$('[data-restore]').forEach(b => b.onclick = () => {
+    const o = S.tasks.find(x => x.id === b.dataset.restore) || S.events.find(x => x.id === b.dataset.restore);
+    if(o){ o.deleted = false; S.trash = S.trash.filter(x => x.id !== o.id); save(); RENDER.settings(); toast('שוחזר'); }
+  });
+  $$('[data-purge]').forEach(b => b.onclick = async () => {
+    if(!(await confirmBox('למחוק לצמיתות? אי אפשר לבטל.', 'מחק לצמיתות', true))) return;
+    S.tasks = S.tasks.filter(x => x.id !== b.dataset.purge); S.events = S.events.filter(x => x.id !== b.dataset.purge);
+    S.trash = S.trash.filter(x => x.id !== b.dataset.purge); save(); RENDER.settings();
+  });
+  const ps = $('#stPersist'); if(ps) ps.onclick = async () => { const ok = await requestPersist(); toast(ok ? 'האחסון המתמשך אושר' : 'הדפדפן לא אישר (בדרך כלל מאושר אחרי התקנה למסך הבית)', !ok); RENDER.settings(); };
+  $('#stGuide').onclick = () => showGuide();
+  $('#stDiag').onclick = showDiag;
+  $('#stWipe').onclick = async () => {
+    if(!(await confirmBox('למחוק את כל הנתונים? מערכת, סיכומים, הקלטות, משימות ומפתח הבינה.', 'המשך', true))) return;
+    if(!(await confirmBox('בטוח? אין דרך לשחזר בלי קובץ גיבוי.', 'מחק הכול', true))) return;
+    await Store.clearAll(); localStorage.removeItem(ERRLOG_KEY); S = freshState(); location.reload();
+  };
+};
+async function testAi(){
+  toast('בודק חיבור…');
+  try{
+    const out = await aiText('ענה במילה אחת בלבד: "מחובר"');
+    S.settings.ai.connected = true; save(); toast('✅ מחובר: ' + out.trim().slice(0,20));
+  }catch(e){ S.settings.ai.connected = false; save(); toast('❌ החיבור נכשל: ' + e.message, true); }
+  updateAiLed(); if(current === 'settings') RENDER.settings();
+}
+function showDiag(){
+  const err = JSON.parse(localStorage.getItem(ERRLOG_KEY) || '[]');
+  const rep = [
+    `ClassNest ${APP_VERSION}`, `UA: ${navigator.userAgent}`, `Storage: ${Store.mode}`, `Secure: ${isSecureContext}`, `Origin: ${location.protocol}`,
+    `SW: ${'serviceWorker' in navigator ? (navigator.serviceWorker.controller ? 'active' : 'not controlling') : 'unsupported'}`,
+    `Notification: ${'Notification' in window ? Notification.permission : 'unsupported'}`,
+    `SpeechRecognition: ${!!(window.SpeechRecognition || window.webkitSpeechRecognition)}`, `MediaRecorder: ${!!window.MediaRecorder}`,
+    `AI: ${S.settings.ai.provider} key=${aiReady() ? 'yes' : 'no'} model=${S.settings.ai.model || 'auto'}`,
+    `Counts: classes=${S.classes.length} subjects=${S.subjects.length} slots=${S.slots.filter(s => s.classId).length} lessons=${Object.keys(S.lessons).length} tasks=${S.tasks.length} events=${S.events.length}`,
+    '', 'Errors (last 10):', ...err.map(e => `${e.t} ${e.m} ${e.s}:${e.l}`)
+  ].join('\n');
+  openModal(`<h2>🩺 דוח אבחון</h2><p class="small muted">בלי תוכן סיכומים ובלי מפתחות — אפשר לשלוח לתמיכה.</p><pre class="diag">${esc(rep)}</pre>
+    <div class="modal-actions"><button class="btn primary" id="dCopy">העתק</button><button class="btn" id="dClose">סגור</button></div>`, m => {
+    $('#dCopy', m).onclick = async () => { try{ await navigator.clipboard.writeText(rep); toast('הועתק'); }catch(e){ toast('ההעתקה נכשלה', true); } };
+    $('#dClose', m).onclick = () => closeModal();
+  });
+}
+
+/* =====================================================================
+   ABOUT + GUIDE
+   ===================================================================== */
+RENDER.about = () => {
+  $('#scr-about').innerHTML = head('אודות') + `
+  <div style="text-align:center;margin:18px 0"><div class="brand-mark" style="width:72px;height:72px;font-size:36px;margin:0 auto;border-radius:18px">📘</div>
+  <h2 style="margin:12px 0 0">ClassNest</h2><p class="muted">היומן של המורה · גרסה ${APP_VERSION}</p></div>
+  <div class="card"><dl class="kv"><dt>גרסה</dt><dd>${APP_VERSION}</dd><dt>פותח</dt><dd>Barak Aflalo</dd><dt>פלטפורמה</dt><dd>PWA · HTML5</dd><dt>אחסון</dt><dd>על המכשיר בלבד</dd><dt>רישיון</dt><dd>© AppNest 2026</dd></dl></div>
+  <div class="btn-row"><a class="btn" href="https://barakaflalo.github.io/appnest" target="_blank" rel="noopener">🏪 חנות AppNest</a>
+  <button class="btn" id="abShare">📤 שתף את האפליקציה</button><a class="btn" href="mailto:appnest55@gmail.com?subject=ClassNest%20${APP_VERSION}">✉️ שלח משוב</a>
+  <button class="btn" id="abGuide">📖 מדריך</button><a class="btn" href="privacy_policy.html" target="_blank" rel="noopener">🔒 מדיניות פרטיות</a></div>
+  <div class="card small muted"><b style="color:var(--ink)">הסרת אחריות.</b> ClassNest הוא כלי עזר אישי לארגון. לוח משרד החינוך המובנה מבוסס על פרסומים פומביים לשנת תשפ"ז ועשוי להשתנות — יש לוודא מועדים מול בית הספר וחוזרי המנכ"ל. תמלולים וסידורי בינה עלולים לטעות. המורה אחראי על שמירת פרטיות התלמידים ועל המידע שהוא מזין.</div>`;
+  $('#abShare').onclick = async () => { const url = location.href.split('#')[0]; try{ if(navigator.share) await navigator.share({title:'ClassNest · היומן של המורה', text:`${S.settings.userName ? S.settings.userName + ' ממליץ/ה: ' : ''}יומן תזכורות למורים`, url}); else { await navigator.clipboard.writeText(url); toast('הקישור הועתק'); } }catch(e){} };
+  $('#abGuide').onclick = () => showGuide();
+};
+const GUIDE = [
+  ['📘','ברוך הבא ל-ClassNest','היומן של המורה: מערכת שעות, סיכומי שיעור, שיעורי בית ותזכורות. הכול נשמר רק על המכשיר שלך.'],
+  ['🏫','מגדירים פעם אחת','צלצולים, כיתות ומקצועות, ואז ממלאים את הטבלה השבועית. מכאן האפליקציה יודעת מתי השיעור הבא של כל כיתה.'],
+  ['📝','סיכום בכל שיעור','מקישים על שיעור בדף הבית, כותבים, מכתיבים בקול או מקליטים. בשיעור הבא תראה מה עשיתם בפעם הקודמת.'],
+  ['📚','שיעורי בית שלא נשכחים','"נתתי שיעורי בית" → התזכורת קופצת בדיוק בשיעור הבא של אותה כיתה, ומדלגת על חופשות.'],
+  ['📅','לוח משרד החינוך','חופשות וימים מיוחדים של תשפ"ז כבר בפנים. מוסיפים טקסים, אסיפות הורים וטיולים, ומקבלים תזכורת כשפותחים את האפליקציה.'],
+  ['💾','כדאי לדעת','גבה מדי פעם מההגדרות. להתראה בזמן אמת גם כשהאפליקציה סגורה — "📲 ליומן הטלפון". מומלץ להתקין למסך הבית.']
+];
+function showGuide(onDone){
+  let i = 0;
+  const draw = m => {
+    const [ic, t, x] = GUIDE[i];
+    m.innerHTML = `<div class="guide-step"><div class="big" aria-hidden="true">${ic}</div><h2>${t}</h2><p>${x}</p></div>
+      <div class="guide-dots" aria-hidden="true">${GUIDE.map((_,k) => `<i class="${k===i?'on':''}"></i>`).join('')}</div>
+      <div class="modal-actions">${i < GUIDE.length-1 ? `<button class="btn primary" id="gN">הבא</button><button class="btn" id="gS">דלג</button>` : `<button class="btn primary" id="gD">${S.slots.some(s=>s.classId)?'סיום':'בוא נתחיל'}</button>`}${i>0?'<button class="btn" id="gB">הקודם</button>':''}</div>`;
+    const n = $('#gN', m), s = $('#gS', m), d = $('#gD', m), b = $('#gB', m);
+    if(n) n.onclick = () => { i++; draw(m); $('button', m).focus(); };
+    if(b) b.onclick = () => { i--; draw(m); };
+    const finish = () => { S.settings.onboarded = true; save(); closeModal(true); if(onDone) onDone(); };
+    if(s) s.onclick = finish;
+    if(d) d.onclick = finish;
+  };
+  openModal('', m => draw(m), () => { S.settings.onboarded = true; save(); });
+}
+
+/* =====================================================================
+   AppNest Assistant — map only (engine file appnest-assistant.js is shared, unchanged)
+   ===================================================================== */
+window.APPNEST_ASSISTANT_CONFIG = {
+  appName: 'ClassNest',
+  appDescription: 'ClassNest הוא יומן תזכורות למורה בבית ספר יסודי שמלמד כמה כיתות ומקצועות: מערכת שעות שבועית, סיכום לכל שיעור (כתיבה/הכתבה/הקלטה+תמלול), שיעורי בית עם תזכורת בשיעור הבא של אותה כיתה, ולוח אירועים עם חופשות משרד החינוך תשפ"ז. עזור למורה לנסח סיכומים ותזכורות, להסביר איך לעשות דברים באפליקציה ולנווט. מידע על תלמידים רגיש — אל תבקש שמות מלאים או פרטים מזהים. מועדי משרד החינוך — לוודא מול בית הספר.',
+  tabs: [
+    {name:'היום שלי', screen:'home'}, {name:'מערכת שעות', screen:'timetable'}, {name:'משימות ושיעורי בית', screen:'tasks'},
+    {name:'לוח אירועים', screen:'events'}, {name:'יומן שיעורים', screen:'journal'}, {name:'הגדרות', screen:'settings'},
+    {name:'בית הספר (צלצולים, כיתות, מקצועות)', screen:'setup'}, {name:'אודות', screen:'about'}
+  ],
+  fields: [{name:'summary', label:'סיכום השיעור (במסך שיעור פתוח)', placeholder:'מה עשינו היום?'}],
+  navigate: name => go(name),
+  readAiConfig: () => ({provider: S.settings.ai.provider, keys:{gemini:Vault.get('gemini'), claude:Vault.get('claude'), openai:Vault.get('openai'), customKey:'', customUrl:'', deviceUrl:''}}),
+  readState: () => {
+    const today = lessonsOn(todayStr());
+    return `היום: ${fmtDate(todayStr())}. שיעורים היום: ${today.map(x => `${x.bell.n}) ${slotLabel(x.slot)}`).join(', ') || 'אין'}. משימות לטיפול עכשיו: ${dueTasks().map(t => t.title).join('; ') || 'אין'}. אירועים קרובים: ${upcomingEvents(14).map(e => e.title + ' ' + e.date).join('; ') || 'אין'}. מסך נוכחי: ${current}.`;
+  },
+  actions: {
+    showReminders: {desc:'הצג את חלון התזכורות הפתוחות', run: () => showReminderSheet(true)},
+    openCurrentLesson: {desc:'פתח את כרטיס השיעור שמתקיים עכשיו (אם יש)', run: () => {
+      const nm = nowMin(), L = lessonsOn(todayStr()).find(x => nm >= toMin(x.bell.start) && nm < toMin(x.bell.end));
+      if(L) go('lesson', {key: lessonKey(todayStr(), L.slot.id)}); else toast('אין שיעור כרגע');
+    }},
+    newReminder: {desc:'פתח חלון להוספת תזכורת חדשה', run: () => editTask(null, {})},
+    weeklyReport: {desc:'הפק דוח שבועי להדפסה/PDF', run: printWeekly}
+  },
+  suggestions: ['מה יש לי היום?', 'איך מוסיפים אסיפת הורים?', 'עזור לי לנסח סיכום לשיעור', 'מתי חופשת חנוכה?']
+};
+/* =====================================================================
+   INIT
+   ===================================================================== */
+let hiddenAt = 0;
+async function init(){
+  if(location.protocol === 'file:'){
+    const b = document.createElement('div'); b.className = 'banner'; b.style.margin = '12px';
+    b.textContent = '⚠️ האפליקציה נפתחה מקובץ מקומי (אולי מתוך ZIP). הקלטה, התקנה ועבודה אופליין לא יעבדו כך — פתח אותה מהכתובת ב-GitHub Pages.';
+    document.body.prepend(b);
+  }
+  await Store.init();
+  await loadState();
+  await Vault.load();
+  mergeBuiltinCalendar();
+  applyTheme(); updateAiLed();
+  if(Store.mode === 'memory') toast('הדפדפן חוסם שמירה — הנתונים לא יישמרו אחרי סגירה', true);
+  await showLock();
+  try{ history.replaceState({name:'home', p:{}}, ''); }catch(e){}
+  go('home', {}, false);
+  if(!S.settings.onboarded) showGuide(() => { if(!S.slots.some(s => s.classId)) go('setup'); });
+  else showReminderSheet(false);
+  reminderTick();
+  setInterval(() => { reminderTick(); if(current === 'home' && !$('.modal-bg')) RENDER.home(); }, 60000);
+  if(S.slots.some(s => s.classId)) requestPersist();
+}
+document.addEventListener('visibilitychange', async () => {
+  if(document.hidden){ hiddenAt = Date.now(); save(true); return; }
+  const away = Date.now() - hiddenAt;
+  if(hiddenAt && S.settings.pinHash && away > 5*60000){ await showLock(); }
+  if(hiddenAt && away > 20*60000){ rerender(); if(!$('.modal-bg')) showReminderSheet(false); }
+  reminderTick();
+});
+window.addEventListener('pagehide', () => save(true));
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => logErr('sw: ' + e.message)));
+}
+init().catch(e => { logErr('init: ' + e.message); toast('שגיאה בפתיחה: ' + e.message, true); });
+window.__MODS = Object.assign(window.__MODS || {}, {classnest: 1});
+</script>
+<script src="appnest-assistant.js" defer onerror="this.remove()"></script>
+</body></html>
