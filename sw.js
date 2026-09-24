@@ -1,11 +1,12 @@
 /* ClassNest service worker — bump VERSION on every upload so phones get the new build */
-const VERSION = 'classnest-1.0.1';
+const VERSION = 'classnest-1.0.2';
 const APP_CACHE = VERSION + '-app';
 const SHELL = ['./', './index.html', './manifest.json', './privacy_policy.html', './icon-192.png', './icon-512.png', './appnest-assistant.js'];
 const NEVER = /generativelanguage\.googleapis\.com|api\.anthropic\.com|api\.openai\.com/;
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(APP_CACHE).then(c => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
+  // file-by-file (not addAll): one missing file must not leave the whole offline cache empty
+  e.waitUntil(caches.open(APP_CACHE).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('classnest-') && k !== APP_CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
