@@ -1,7 +1,7 @@
 /* ClassNest service worker — bump VERSION on every upload so phones get the new build */
-const VERSION = 'classnest-1.0.0';
+const VERSION = 'classnest-1.0.1';
 const APP_CACHE = VERSION + '-app';
-const SHELL = ['./', './index.html', './manifest.json', './privacy_policy.html', './icon-192.png', './icon-512.png'];
+const SHELL = ['./', './index.html', './manifest.json', './privacy_policy.html', './icon-192.png', './icon-512.png', './appnest-assistant.js'];
 const NEVER = /generativelanguage\.googleapis\.com|api\.anthropic\.com|api\.openai\.com/;
 
 self.addEventListener('install', e => {
